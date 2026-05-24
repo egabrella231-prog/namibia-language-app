@@ -1,86 +1,64 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Picker } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import * as Speech from 'expo-speech';
 
 export default function App() {
-  const [inputText, setInputText] = useState('');
-  const [result, setResult] = useState<any>(null);
+  const [query, setQuery] = useState('');
+  const [direction, setDirection] = useState('Oshikwanyama → English');
+  const [result, setResult] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [langMode, setLangMode] = useState('wn-en');
 
   const handleTranslate = async () => {
-    if (!inputText.trim()) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/dictionary?search=${encodeURIComponent(inputText.trim())}`);
+      const response = await fetch(`/api/dictionary?search=${encodeURIComponent(query)}`);
       const data = await response.json();
-      if (data.success) {
-        setResult(data.record);
-      } else {
-        setResult({ english_translation: "No match found in database." });
-      }
+      setResult(data.success ? data.record.english_translation : "No translation found.");
     } catch (e) {
-      setResult({ english_translation: "Error connecting to Neon database." });
+      setResult("Error connecting to database.");
     } finally {
       setLoading(false);
     }
   };
 
-  const speak = () => {
-    if (result?.english_translation) {
-      Speech.speak(result.english_translation, { language: 'en' });
-    }
-  };
-
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Namibia Speech Bridge</Text>
-
-      {/* Language Selector */}
-      <Picker selectedValue={langMode} onValueChange={setLangMode} style={styles.picker}>
-        <Picker.Item label="Oshikwanyama ↔ English" value="wn-en" />
-        <Picker.Item label="English ↔ Oshikwanyama" value="en-wn" />
-      </Picker>
-
-      {/* Input Area */}
-      <TextInput 
-        style={styles.input} 
-        placeholder="Type word or phrase..." 
-        value={inputText} 
-        onChangeText={setInputText} 
-      />
-
-      <TouchableOpacity style={styles.mainButton} onPress={handleTranslate}>
-        <Text style={styles.buttonText}>Translate & Query Neon</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Namibia Speech Bridge</Text>
+      
+      {/* Language Switcher */}
+      <TouchableOpacity style={styles.switchButton} onPress={() => setDirection(d => d.includes('Oshi') ? 'English → Oshikwanyama' : 'Oshikwanyama → English')}>
+        <Text style={styles.switchText}>{direction} ⇄</Text>
       </TouchableOpacity>
 
-      {/* Output Card */}
+      <TextInput style={styles.input} placeholder="Type a word..." value={query} onChangeText={setQuery} />
+      
+      <TouchableOpacity style={styles.mainButton} onPress={handleTranslate}>
+        <Text style={styles.buttonText}>Translate</Text>
+      </TouchableOpacity>
+
       <View style={styles.card}>
-        {loading ? <ActivityIndicator /> : (
-          <>
-            <Text style={styles.resultLabel}>Translation:</Text>
-            <Text style={styles.resultText}>{result?.english_translation || '---'}</Text>
-            {result?.english_translation && (
-              <TouchableOpacity style={styles.speakerButton} onPress={speak}>
-                <Text>🔊 Speak</Text>
-              </TouchableOpacity>
-            )}
-          </>
-        )}
+        <Text style={styles.resultLabel}>Translation:</Text>
+        {loading ? <ActivityIndicator color="#007AFF" /> : <Text style={styles.resultText}>{result}</Text>}
+        
+        <View style={styles.audioRow}>
+          <TouchableOpacity onPress={() => Speech.speak(query)}><Text>🎤 Input</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => Speech.speak(result)}><Text>🔊 Result</Text></TouchableOpacity>
+        </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: '#f9fafb', flexGrow: 1 },
-  header: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  picker: { backgroundColor: '#fff', marginBottom: 20 },
-  input: { backgroundColor: '#fff', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: '#ddd', marginBottom: 15 },
-  mainButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: 'bold' },
-  card: { marginTop: 20, padding: 20, backgroundColor: '#fff', borderRadius: 10, alignItems: 'center' },
-  resultLabel: { color: '#666', marginBottom: 5 },
-  resultText: { fontSize: 18, fontWeight: '600', marginBottom: 15 },
-  speakerButton: { padding: 10, backgroundColor: '#e5e7eb', borderRadius: 5 }
+  container: { flex: 1, padding: 25, backgroundColor: '#f8f9fa' },
+  title: { fontSize: 24, fontWeight: '800', textAlign: 'center', marginBottom: 20 },
+  switchButton: { backgroundColor: '#e9ecef', padding: 10, borderRadius: 8, marginBottom: 15, alignItems: 'center' },
+  switchText: { fontWeight: '600', color: '#495057' },
+  input: { backgroundColor: '#fff', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#dee2e6', marginBottom: 15 },
+  mainButton: { backgroundColor: '#007AFF', padding: 18, borderRadius: 12, alignItems: 'center' },
+  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  card: { marginTop: 30, padding: 20, backgroundColor: '#fff', borderRadius: 15, shadowColor: '#000', shadowOpacity: 0.1, elevation: 3 },
+  resultLabel: { color: '#666', marginBottom: 10 },
+  resultText: { fontSize: 20, fontWeight: '700', marginBottom: 20 },
+  audioRow: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderColor: '#eee', paddingTop: 15 }
 });
