@@ -11,7 +11,6 @@ interface DictionaryWord {
   pronunciation_hint?: string;
 }
 
-// Resilient Hardcoded Local Fallback Array (Ensures your app is NEVER blank offline!)
 const FALLBACK_WORDS: DictionaryWord[] = [
   { id: 'f1', english_word: 'Hello', translated_word: 'Wa aluka', language: 'Oshikwanyama', pronunciation_hint: 'Wah ah-loo-kah' },
   { id: 'f2', english_word: 'Thank you', translated_word: 'Tangi unene', language: 'Oshikwanyama', pronunciation_hint: 'Tahn-gee oo-neh-neh' },
@@ -34,10 +33,17 @@ export default function App() {
   useEffect(() => {
     const dataToFilter = words.length > 0 ? words : FALLBACK_WORDS;
     const filtered = dataToFilter.filter((item) => {
-      const matchesLanguage = item.language.toLowerCase() === selectedLanguage.toLowerCase();
-      const matchesSearch = 
-        item.english_word.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.translated_word.toLowerCase().includes(searchQuery.toLowerCase());
+      // Safe fallback checks to prevent toLowerCase() crashes on missing column names
+      const itemLang = item?.language ? String(item.language).toLowerCase() : '';
+      const targetLang = selectedLanguage ? selectedLanguage.toLowerCase() : '';
+      
+      const englishWord = item?.english_word ? String(item.english_word).toLowerCase() : '';
+      const localWord = item?.translated_word ? String(item.translated_word).toLowerCase() : '';
+      const search = searchQuery ? searchQuery.toLowerCase() : '';
+
+      const matchesLanguage = itemLang === targetLang;
+      const matchesSearch = englishWord.includes(search) || localWord.includes(search);
+      
       return matchesLanguage && matchesSearch;
     });
     setFilteredWords(filtered);
@@ -56,7 +62,6 @@ export default function App() {
         setWords(data);
         setIsOffline(false);
       } else {
-        // Safe fallback if data comes back completely empty
         setWords(FALLBACK_WORDS);
       }
     } catch (err) {
@@ -117,15 +122,15 @@ export default function App() {
       ) : (
         <FlatList
           data={filteredWords}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => item?.id || String(index)}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No vocabulary terms found matching your query.</Text>
           }
           renderItem={({ item }) => (
             <View style={styles.wordCard}>
               <View style={styles.wordInfo}>
-                <Text style={styles.englishWord}>{item.english_word}</Text>
-                <Text style={styles.translatedWord}>{item.translated_word}</Text>
+                <Text style={styles.englishWord}>{item.english_word || 'No English'}</Text>
+                <Text style={styles.translatedWord}>{item.translated_word || 'No Translation'}</Text>
                 {item.pronunciation_hint && (
                   <Text style={styles.hintText}>🗣️ {item.pronunciation_hint}</Text>
                 )}
@@ -152,7 +157,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: '600', color: '#333' },
   tabContainer: { flexDirection: 'row', backgroundColor: '#e4e7eb', borderRadius: 8, padding: 4, marginBottom: 16 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 6 },
-  activeTab: { backgroundColor: '#ffffff', height: 40, justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2 },
+  activeTab: { backgroundColor: '#ffffff', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2 },
   tabText: { fontSize: 16, fontWeight: '600', color: '#666' },
   activeTabText: { color: '#0066cc' },
   searchBar: { backgroundColor: '#fff', padding: 14, borderRadius: 8, fontSize: 16, borderWidth: 1, borderColor: '#ddd', marginBottom: 16, color: '#333' },
