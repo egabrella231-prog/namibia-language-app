@@ -1,232 +1,177 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator, ScrollView, Platform } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { StyleSheet, Text, View, TextInput, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { supabase } from '../lib/supabase'; // Adjust this import path if your file lives elsewhere
 import * as Speech from 'expo-speech';
 
-// --- TS INTERFACES FOR TYPE SAFETY ---
-interface DictionaryRow {
-  id: number;
-  language_code: string;
-  native_word: string;
-  english_translation: string;
-  audio_url?: string | null; // Placeholder column for actual recorded native pronunciations
-}
-
-// Global window extension interface for standard Web Speech APIs
-interface WebSpeechWindow extends Window {
-  SpeechRecognition?: any;
-  webkitSpeechRecognition?: any;
+// Type definitions for dictionary entries
+interface DictionaryWord {
+  id: string;
+  english_word: string;
+  translated_word: string;
+  language: string;
+  pronunciation_hint?: string;
 }
 
 export default function App() {
-  // --- STATE HOOKS WITH STRICT TYPES ---
-  const [inputText, setInputText] = useState<string>(''); 
-  const [translation, setTranslation] = useState<string>(''); 
-  const [isLoading, setIsLoading] = useState<boolean>(false); 
-  const [errorMessage, setErrorMessage] = useState<string | null>(null); 
-  
-  const [selectedLanguage, setSelectedLanguage] = useState<'kwanyama' | 'ndonga' | 'herero'>('kwanyama');
-  const [translationDirection, setTranslationDirection] = useState<'NATIVE_TO_ENG' | 'ENG_TO_NATIVE'>('NATIVE_TO_ENG');
-  const [isListening, setIsListening] = useState<boolean>(false); 
-  const [webRecognition, setWebRecognition] = useState<any>(null); 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState<'Oshikwanyama' | 'Otjiherero'>('Oshikwanyama');
+  const [words, setWords] = useState<DictionaryWord[]>([]);
+  const [filteredWords, setFilteredWords] = useState<DictionaryWord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
 
-  // --- ENGINE INITIALIZATION ---
+  // Load dictionary on startup
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const customWindow = window as unknown as WebSpeechWindow;
-      const SpeechRecognition = customWindow.SpeechRecognition || customWindow.webkitSpeechRecognition;
-      
-      if (SpeechRecognition) {
-        const recog = new SpeechRecognition();
-        recog.continuous = false; 
-        recog.interimResults = false; 
-        
-        recog.onstart = () => setIsListening(true);
-        recog.onend = () => setIsListening(false);
-        recog.onresult = (event: any) => {
-          const transcript: string = event.results[0][0].transcript;
-          setInputText(transcript); 
-        };
-        recog.onerror = () => setIsListening(false);
-        setWebRecognition(recog);
-      }
-    }
+    fetchDictionary();
   }, []);
 
-  // --- QUERY CONTROLLER ---
-  const handleTranslate = async () => {
-    if (!inputText.trim()) return;
+  // Handle filtering when user types or changes language selection
+  useEffect(() => {
+    const filtered = words.filter((item) => {
+      const matchesLanguage = item.language.toLowerCase() === selectedLanguage.toLowerCase();
+      const matchesSearch = 
+        item.english_word.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.translated_word.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesLanguage && matchesSearch;
+    });
+    setFilteredWords(filtered);
+  }, [searchQuery, selectedLanguage, words]);
 
-    setIsLoading(true);
-    setErrorMessage(null);
-    setTranslation('');
-
+  // Main fetch engine with built-in fallback logic
+  const fetchDictionary = async () => {
+    setLoading(true);
     try {
-      let query = supabase
-        .from('universal_dictionary')
-        .select('*')
-        .eq('language_code', selectedLanguage);
+      // 1. Try to fetch fresh records from cloud Supabase instance
+      const { data, error } = await supabase
+        .from('dictionary') // Replace with your exact Supabase table name if different
+        .select('*');
 
-      if (translationDirection === 'NATIVE_TO_ENG') {
-        query = query.ilike('native_word', inputText.trim()); 
-      } else {
-        query = query.ilike('english_translation', inputText.trim());
-      }
-
-      const { data, error } = await query.maybeSingle();
       if (error) throw error;
 
-      // Cast returned data structure safely onto data schema interfaces
-      const typedData = data as DictionaryRow | null;
-
-      if (typedData) {
-        setTranslation(translationDirection === 'NATIVE_TO_ENG' ? typedData.english_translation : typedData.native_word);
-      } else {
-        setTranslation('Translation not found / Inga i monika.');
+      if (data) {
+        setWords(data);
+        setIsOffline(false);
+        // Save to local device storage container for future offline use
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('cached_dictionary', JSON.stringify(data));
+        }
       }
-    } catch (error) {
-      console.error(error);
-      setErrorMessage('Network connection or database error.');
+    } catch (err) {
+      console.log('Network fetch failed, activating offline mode...', err);
+      setIsOffline(true);
+
+      // 2. Fallback: Retrieve the last successful download from cache storage
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cachedData = window.localStorage.getItem('cached_dictionary');
+        if (cachedData) {
+          setWords(JSON.parse(cachedData));
+        }
+      }
     } finally {
-      setIsLoading(false); 
+      setLoading(false);
     }
   };
 
-  // --- STT CONTROLLER ---
-  const toggleListening = async () => {
-    if (Platform.OS === 'web') {
-      if (!webRecognition) {
-        alert('Voice recognition not supported on this browser version. Use Google Chrome!');
-        return;
-      }
-      if (isListening) {
-        webRecognition.stop();
-      } else {
-        setInputText(''); 
-        webRecognition.lang = translationDirection === 'NATIVE_TO_ENG' ? 'en-ZA' : 'en-US';
-        try { webRecognition.start(); } catch (e) { webRecognition.stop(); }
-      }
-    } else {
-      alert('Native mobile microphone engine ready for device compilation!');
-    }
-  };
-
-  // --- TTS CONTROLLER ---
-  const speakOutput = () => {
-    if (!translation) return;
-    
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel(); 
-        const utterance = new SpeechSynthesisUtterance(translation);
-        utterance.lang = translationDirection === 'NATIVE_TO_ENG' ? 'en-US' : 'en-ZA';
-        window.speechSynthesis.speak(utterance);
-      }
-    } else {
-      Speech.stop();
-      const speechLocale = translationDirection === 'NATIVE_TO_ENG' ? 'en-US' : 'en-ZA';
-      Speech.speak(translation, { language: speechLocale, pitch: 1.0, rate: 0.9 });
-    }
+  // Trigger Native Text-to-Speech Engine
+  const speakWord = (text: string) => {
+    if (!text) return;
+    Speech.speak(text, {
+      language: selectedLanguage === 'Oshikwanyama' ? 'en' : 'en', // Fallback to compatible vocal nodes
+      pitch: 1.0,
+      rate: 0.85,
+    });
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.headerTitle}>Toloka</Text>
-        <Text style={styles.headerSubtitle}>Namibia Speech Bridge</Text>
-      </View>
-
-      <View style={styles.languageSelectorCard}>
-        <Text style={styles.selectorLabel}>Target Namibian Language:</Text>
-        <View style={styles.pickerRow}>
-          <TouchableOpacity 
-            style={[styles.pickerTab, selectedLanguage === 'kwanyama' && styles.pickerTabActive]}
-            onPress={() => { setSelectedLanguage('kwanyama'); setTranslation(''); }}
-          >
-            <Text style={[styles.pickerTabText, selectedLanguage === 'kwanyama' && styles.pickerTabActiveText]}>Oshikwanyama</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.pickerTab, selectedLanguage === 'herero' && styles.pickerTabActive]}
-            onPress={() => { setSelectedLanguage('herero'); setTranslation(''); }}
-          >
-            <Text style={[styles.pickerTabText, selectedLanguage === 'herero' && styles.pickerTabActiveText]}>Otjiherero</Text>
-          </TouchableOpacity>
+    <View style={styles.container}>
+      {/* App Header Banner */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Toloka: Namibia</Text>
+        <Text style={styles.subtitle}>Speech Bridge Dictionary</Text>
+        
+        {/* Sync / Status Indicator Banner */}
+        <View style={[styles.statusBadge, isOffline ? styles.offlineBadge : styles.onlineBadge]}>
+          <Text style={styles.statusText}>
+            {isOffline ? '⚠️ Offline Mode (Cached Data)' : '🟢 Connected to Cloud'}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.switcherContainer}>
-        <Text style={styles.directionText}>
-          {translationDirection === 'NATIVE_TO_ENG' ? 'Local Language ➔ English' : 'English ➔ Local Language'}
-        </Text>
-        <TouchableOpacity style={styles.switchButton} onPress={() => {
-          setTranslationDirection(prev => prev === 'NATIVE_TO_ENG' ? 'ENG_TO_NATIVE' : 'NATIVE_TO_ENG');
-          setInputText(''); setTranslation('');
-        }}>
-          <Text style={styles.switchIconText}>⇄ Swap Direction</Text>
-        </TouchableOpacity>
+      {/* Language Selector Controls */}
+      <View style={styles.tabContainer}>
+        {(['Oshikwanyama', 'Otjiherero'] as const).map((lang) => (
+          <TouchableOpacity
+            key={lang}
+            style={[styles.tab, selectedLanguage === lang && styles.activeTab]}
+            onPress={() => setSelectedLanguage(lang)}
+          >
+            <Text style={[styles.tabText, selectedLanguage === lang && styles.activeTabText]}>
+              {lang}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            style={styles.input}
-            placeholder="Type or click the microphone to speak..."
-            placeholderTextColor="#94A3B8"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-          />
-          <TouchableOpacity style={[styles.micBigButton, isListening && styles.micListeningActive]} onPress={toggleListening}>
-            <Text style={styles.buttonEmojiIcon}>{isListening ? '🛑' : '🎤'}</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Search Input Box */}
+      <TextInput
+        style={styles.searchBar}
+        placeholder="Search English or local words..."
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholderTextColor="#888"
+      />
 
-        <TouchableOpacity style={styles.translateActionBtn} onPress={handleTranslate}>
-          {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.translateActionBtnText}>Translate Text</Text>}
-        </TouchableOpacity>
-
-        {translation ? (
-          <View style={styles.resultContainer}>
-            <View style={styles.resultBox}>
-              <Text style={styles.resultText}>{translation}</Text>
+      {/* Render Component State Layout */}
+      {loading ? (
+        <ActivityIndicator size="large" color="#0066cc" style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={filteredWords}
+          keyExtractor={(item) => item.id}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No vocabulary terms found matching your query.</Text>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.wordCard}>
+              <View style={styles.wordInfo}>
+                <Text style={styles.englishWord}>{item.english_word}</Text>
+                <Text style={styles.translatedWord}>{item.translated_word}</Text>
+                {item.pronunciation_hint && (
+                  <Text style={styles.hintText}>🗣️ {item.pronunciation_hint}</Text>
+                )}
+              </View>
+              <TouchableOpacity style={styles.speakButton} onPress={() => speakWord(item.translated_word)}>
+                <Text style={styles.speakIcon}>🔊</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.speakOutputButton} onPress={speakOutput}>
-              <Text style={styles.speakOutputButtonText}>🔊 Tap to Listen (Hear Word)</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-      </View>
-    </ScrollView>
+          )}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: '#F8FAFC', padding: 16, alignItems: 'center', justifyContent: 'center' },
-  headerContainer: { alignItems: 'center', marginBottom: 20 },
-  headerTitle: { fontSize: 42, fontWeight: '900', color: '#2563EB', textAlign: 'center', letterSpacing: -1 },
-  headerSubtitle: { fontSize: 16, color: '#475569', fontWeight: '700', textAlign: 'center', marginTop: 2, textTransform: 'uppercase', letterSpacing: 1 },
-  languageSelectorCard: { backgroundColor: '#FFFFFF', width: '100%', maxWidth: 450, borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
-  selectorLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 8, textTransform: 'uppercase' },
-  pickerRow: { flexDirection: 'row', gap: 8 },
-  pickerTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: '#F1F5F9' },
-  pickerTabActive: { backgroundColor: '#2563EB' },
-  pickerTabText: { fontSize: 13, fontWeight: '600', color: '#475569' },
-  pickerTabActiveText: { color: '#FFFFFF' },
-  switcherContainer: { width: '100%', maxWidth: 450, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, marginBottom: 12 },
-  directionText: { fontSize: 14, fontWeight: '700', color: '#334155' },
-  switchButton: { backgroundColor: '#E2E8F0', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  switchIconText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, width: '100%', maxWidth: 450, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 16, padding: 8, marginBottom: 12 },
-  input: { flex: 1, minHeight: 70, fontSize: 16, color: '#0F172A', textAlignVertical: 'top' },
-  micBigButton: { backgroundColor: '#E2E8F0', width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
-  micListeningActive: { backgroundColor: '#EF4444' },
-  buttonEmojiIcon: { fontSize: 24, textAlign: 'center' },
-  translateActionBtn: { backgroundColor: '#2563EB', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  translateActionBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  resultContainer: { marginTop: 12, gap: 8 },
-  resultBox: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#DCFCE7', borderRadius: 14, padding: 16 },
-  resultText: { fontSize: 20, color: '#166534', fontWeight: '800', textAlign: 'center' },
-  speakOutputButton: { backgroundColor: '#10B981', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  speakOutputButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' }
+  container: { flex: 1, backgroundColor: '#f5f7fb', paddingHorizontal: 16, paddingTop: 40 },
+  header: { alignItems: 'center', marginBottom: 20 },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#1a1a1a' },
+  subtitle: { fontSize: 16, color: '#666', marginTop: 4 },
+  statusBadge: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 12, marginTop: 10 },
+  onlineBadge: { backgroundColor: '#e2f9e9' },
+  offlineBadge: { backgroundColor: '#fff3cd' },
+  statusText: { fontSize: 12, fontWeight: '600', color: '#333' },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#e4e7eb', borderRadius: 8, padding: 4, marginBottom: 16 },
+  tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 6 },
+  activeTab: { backgroundColor: '#ffffff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2 },
+  tabText: { fontSize: 16, fontWeight: '600', color: '#666' },
+  activeTabText: { color: '#0066cc' },
+  searchBar: { backgroundColor: '#fff', padding: 14, borderRadius: 8, fontSize: 16, borderHorizontalWidth: 1, borderColor: '#ddd', marginBottom: 16, color: '#333' },
+  wordCard: { flexDirection: 'row', backgroundColor: '#fff', padding: 16, borderRadius: 8, marginBottom: 12, alignItems: 'center', justifyContent: 'space-between', elevation: 1 },
+  wordInfo: { flex: 1, paddingRight: 8 },
+  englishWord: { fontSize: 14, color: '#777', textTransform: 'uppercase', fontWeight: '500' },
+  translatedWord: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a', marginTop: 2 },
+  hintText: { fontSize: 13, color: '#555', fontStyle: 'italic', marginTop: 4 },
+  speakButton: { backgroundColor: '#e6f0fa', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  speakIcon: { fontSize: 18 },
+  emptyText: { textAlign: 'center', color: '#888', marginTop: 40, fontSize: 16 },
 });
