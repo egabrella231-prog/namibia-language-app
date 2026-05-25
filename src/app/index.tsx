@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator,
 import { supabase } from '../lib/supabase';
 import * as Speech from 'expo-speech';
 
-// Multi-tier Fallback Dictionary
+// Multi-tier Fallback Dictionary (Now completely functional)
 const OFFLINE_DICTIONARY = [
   { english_word: 'good', translated_word: 'nawa', language: 'oshikwanyama' },
   { english_word: 'hello', translated_word: 'wa aluka', language: 'oshikwanyama' },
@@ -23,6 +23,9 @@ export default function App() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
+  // Hover state managers for crisp web interactions
+  const [hoveredButton, setHoveredButton] = useState<string | null>(null);
+
   // Synchronize database records on bootup
   useEffect(() => {
     const fetchPhrases = async () => {
@@ -31,6 +34,7 @@ export default function App() {
         if (error) throw error;
         if (data && data.length > 0) {
           setWords(data);
+          console.log("Cloud synchronized successfully.");
         }
       } catch (err) {
         console.log('Database operating offline securely via cache array fallback.', err);
@@ -40,7 +44,7 @@ export default function App() {
     fetchPhrases();
   }, []);
 
-  // Secure Translation Computation Engine
+  // Secure Translation Computation Engine (Fixed Else Paths)
   const handleTranslate = () => {
     const cleanInput = inputText.trim().toLowerCase();
     if (!cleanInput) {
@@ -57,11 +61,13 @@ export default function App() {
     let match;
 
     if (isLocalToEnglish) {
+      // Local Language ➔ English Path
       match = currentLangWords.find(
         (w) => String(w?.translated_word || '').trim().toLowerCase() === cleanInput
       );
       setTranslatedText(match ? match.english_word : "Translation not found in dictionary.");
     } else {
+      // English ➔ Local Language Path
       match = currentLangWords.find(
         (w) => String(w?.english_word || '').trim().toLowerCase() === cleanInput
       );
@@ -78,7 +84,6 @@ export default function App() {
 
     setIsSpeaking(true);
     try {
-      // Direct Native Speech Engine Hook
       Speech.speak(textToSpeak, { 
         pitch: 1.0, 
         rate: 0.85,
@@ -87,7 +92,7 @@ export default function App() {
         onError: () => setIsSpeaking(false)
       });
     } catch (e) {
-      console.log('TTS audio output stream interupt:', e);
+      console.log('TTS audio output stream interrupt:', e);
       setIsSpeaking(false);
     }
   };
@@ -113,8 +118,18 @@ export default function App() {
           <View style={styles.tabContainer}>
             <TouchableOpacity 
               activeOpacity={0.8}
-              style={[styles.langButton, selectedLanguage === 'Oshikwanyama' && styles.activeLangButton]}
+              style={[
+                styles.langButton, 
+                selectedLanguage === 'Oshikwanyama' && styles.activeLangButton,
+                hoveredButton === 'osh' && styles.langButtonHovered
+              ]}
               onPress={() => setSelectedLanguage('Oshikwanyama')}
+              {...Platform.select({
+                web: {
+                  onMouseEnter: () => setHoveredButton('osh'),
+                  onMouseLeave: () => setHoveredButton(null)
+                }
+              } as any)}
             >
               <Text style={[styles.langButtonText, selectedLanguage === 'Oshikwanyama' && styles.activeLangButtonText]}>
                 Oshikwanyama
@@ -123,8 +138,18 @@ export default function App() {
             
             <TouchableOpacity 
               activeOpacity={0.8}
-              style={[styles.langButton, selectedLanguage === 'Otjiherero' && styles.activeLangButton]}
+              style={[
+                styles.langButton, 
+                selectedLanguage === 'Otjiherero' && styles.activeLangButton,
+                hoveredButton === 'otj' && styles.langButtonHovered
+              ]}
               onPress={() => setSelectedLanguage('Otjiherero')}
+              {...Platform.select({
+                web: {
+                  onMouseEnter: () => setHoveredButton('otj'),
+                  onMouseLeave: () => setHoveredButton(null)
+                }
+              } as any)}
             >
               <Text style={[styles.langButtonText, selectedLanguage === 'Otjiherero' && styles.activeLangButtonText]}>
                 Otjiherero
@@ -140,12 +165,18 @@ export default function App() {
           </Text>
           <TouchableOpacity 
             activeOpacity={0.7}
-            style={styles.neonSwapButton} 
+            style={[styles.neonSwapButton, hoveredButton === 'swap' && styles.neonSwapButtonHovered]} 
             onPress={() => {
               setIsLocalToEnglish(!isLocalToEnglish);
               setInputText('');
               setTranslatedText('');
             }}
+            {...Platform.select({
+              web: {
+                onMouseEnter: () => setHoveredButton('swap'),
+                onMouseLeave: () => setHoveredButton(null)
+              }
+            } as any)}
           >
             <Text style={styles.swapButtonText}>⇄ Swap Path</Text>
           </TouchableOpacity>
@@ -167,8 +198,18 @@ export default function App() {
             
             <TouchableOpacity 
               activeOpacity={0.7}
-              style={[styles.micAudioNode, isSpeaking && styles.micAudioNodeActive]} 
+              style={[
+                styles.micAudioNode, 
+                isSpeaking && styles.micAudioNodeActive,
+                hoveredButton === 'mic' && styles.micAudioNodeHovered
+              ]} 
               onPress={handleVoicePronounce}
+              {...Platform.select({
+                web: {
+                  onMouseEnter: () => setHoveredButton('mic'),
+                  onMouseLeave: () => setHoveredButton(null)
+                }
+              } as any)}
             >
               <Text style={styles.micEmojiIcon}>{isSpeaking ? "🔊" : "🎤"}</Text>
             </TouchableOpacity>
@@ -180,7 +221,7 @@ export default function App() {
           ) : (
             translatedText !== '' && (
               <View style={styles.neonResultContainer}>
-                <Text style={styles.resultHeaderTag}>TRANSLATION</Text>
+                <Text style={styles.resultHeaderTag}>TRANSLATION RESULT</Text>
                 <Text style={styles.resultValueText}>{translatedText}</Text>
               </View>
             )
@@ -189,8 +230,14 @@ export default function App() {
           {/* Action Translation Execution Node */}
           <TouchableOpacity 
             activeOpacity={0.8}
-            style={styles.glowingActionBtn} 
+            style={[styles.glowingActionBtn, hoveredButton === 'translate' && styles.glowingActionBtnHovered]} 
             onPress={handleTranslate}
+            {...Platform.select({
+              web: {
+                onMouseEnter: () => setHoveredButton('translate'),
+                onMouseLeave: () => setHoveredButton(null)
+              }
+            } as any)}
           >
             <Text style={styles.glowingActionBtnText}>Translate System</Text>
           </TouchableOpacity>
@@ -202,7 +249,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  // Responsive Cyberpunk Layout Architecture
+  // Core responsive positioning blocks
   container: { flex: 1, backgroundColor: '#0a0813' },
   scrollContainer: { padding: 20, width: '100%', maxWidth: 480, alignSelf: 'center', justifyContent: 'center', paddingTop: 50 },
   
@@ -216,7 +263,8 @@ const styles = StyleSheet.create({
   neonCard: { backgroundColor: '#131124', width: '100%', borderRadius: 16, padding: 18, borderHorizontalWidth: 1, borderColor: '#1f1c3a', marginBottom: 18 },
   sectionLabel: { fontSize: 10, fontWeight: '800', color: '#6a6b83', marginBottom: 12, letterSpacing: 1.5, textAlign: 'center' },
   tabContainer: { flexDirection: 'row', gap: 12 },
-  langButton: { flex: 1, backgroundColor: '#1b1931', paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: 'transparent' },
+  langButton: { flex: 1, backgroundColor: '#1b1931', paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: 'transparent', transitionProperty: 'all', transitionDuration: '0.2s' } as any,
+  langButtonHovered: { borderColor: '#ff007f', transform: [{ scale: 1.02 }] } as any,
   activeLangButton: { backgroundColor: '#15122b', borderColor: '#00f3ff', shadowColor: '#00f3ff', shadowOpacity: 0.3, shadowRadius: 8 },
   langButtonText: { fontSize: 13, fontWeight: '700', color: '#767891' },
   activeLangButtonText: { color: '#00f3ff', textShadowColor: '#00f3ff', textShadowRadius: 4 },
@@ -224,26 +272,29 @@ const styles = StyleSheet.create({
   // Interactive Swapping Controls
   directionWrapper: { flexDirection: 'row', width: '100%', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingHorizontal: 6 },
   directionTextText: { fontSize: 14, fontWeight: '800', color: '#ffffff', letterSpacing: 0.5 },
-  neonSwapButton: { backgroundColor: '#1b1931', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: '#ff007f' },
-  swapButtonText: { fontSize: 12, fontWeight: '700', color: '#ff007f' },
+  neonSwapButton: { backgroundColor: '#1b1931', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: '#ff007f', transitionProperty: 'all', transitionDuration: '0.2s' } as any,
+  neonSwapButtonHovered: { backgroundColor: '#ff007f', shadowColor: '#ff007f', shadowOpacity: 0.4, shadowRadius: 8, transform: [{ scale: 1.05 }] } as any,
+  swapButtonText: { fontSize: 12, fontWeight: '700', color: '#ffffff' },
   
   // Translation Core Terminal Dashboard Elements
   mainConsoleCard: { backgroundColor: '#131124', width: '100%', borderRadius: 20, padding: 20, gap: 16, borderWidth: 1, borderColor: '#1f1c3a' },
-  mainConsoleCardFocused: { borderColor: '#00f3ff', shadowColor: '#00f3ff', shadowOpacity: 0.15, shadowRadius: 12 },
+  mainConsoleCardFocused: { borderColor: '#00f3ff', shadowColor: '#00f3ff', shadowOpacity: 0.25, shadowRadius: 15 },
   interactiveInputRow: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 90, padding: 4 },
-  cleanTextArea: { flex: 1, fontSize: 17, color: '#ffffff', padding: 0, minHeight: 75, fontWeight: '600' },
+  cleanTextArea: { flex: 1, fontSize: 17, color: '#ffffff', padding: 0, minHeight: 75, fontWeight: '600', outlineStyle: 'none' } as any,
   
   // Animated Interactive Audio Nodes
-  micAudioNode: { backgroundColor: '#1b1931', width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginLeft: 10, borderHorizontalWidth: 1, borderColor: '#00f3ff' },
-  micAudioNodeActive: { backgroundColor: '#ff007f', borderColor: '#ff007f', transform: [{ scale: 1.05 }] },
+  micAudioNode: { backgroundColor: '#1b1931', width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginLeft: 10, borderHorizontalWidth: 1, borderColor: '#00f3ff', transitionProperty: 'all', transitionDuration: '0.2s' } as any,
+  micAudioNodeHovered: { transform: [{ scale: 1.1 }], shadowColor: '#00f3ff', shadowOpacity: 0.5, shadowRadius: 10 } as any,
+  micAudioNodeActive: { backgroundColor: '#ff007f', borderColor: '#ff007f', shadowColor: '#ff007f', shadowOpacity: 0.6, shadowRadius: 12, transform: [{ scale: 1.15 }] } as any,
   micEmojiIcon: { fontSize: 18 },
   
   // Clean Action Execution Control Blocks
-  glowingActionBtn: { backgroundColor: '#00f3ff', width: '100%', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 4, shadowColor: '#00f3ff', shadowOpacity: 0.4, shadowRadius: 10 },
+  glowingActionBtn: { backgroundColor: '#00f3ff', width: '100%', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 4, shadowColor: '#00f3ff', shadowOpacity: 0.4, shadowRadius: 10, transitionProperty: 'all', transitionDuration: '0.2s' } as any,
+  glowingActionBtnHovered: { backgroundColor: '#00cacc', shadowColor: '#00f3ff', shadowOpacity: 0.6, shadowRadius: 14, transform: [{ scale: 1.02 }] } as any,
   glowingActionBtnText: { color: '#0a0813', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
   
   // Neon Outputs Display Boxes
   neonResultContainer: { borderTopWidth: 1, borderTopColor: '#1f1c3a', paddingTop: 16, width: '100%', gap: 4 },
   resultHeaderTag: { fontSize: 11, fontWeight: '800', color: '#ff007f', letterSpacing: 2 },
-  resultValueText: { fontSize: 22, fontWeight: '700', color: '#ffffff', marginTop: 2 }
+  resultValueText: { fontSize: 22, fontWeight: '700', color: '#00f3ff', marginTop: 2, textShadowColor: '#00f3ff', textShadowRadius: 4 }
 });
