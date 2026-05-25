@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Text, View, TextInput, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
 import * as Speech from 'expo-speech';
@@ -22,10 +22,7 @@ export default function App() {
   const [words, setWords] = useState(OFFLINE_DICTIONARY);
   const [isListening, setIsListening] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  // Audio Streaming Core References
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const [recognition, setRecognition] = useState<any>(null);
 
   // Database Synchronization Engine
   useEffect(() => {
@@ -45,55 +42,73 @@ export default function App() {
     fetchPhrases();
   }, []);
 
-  // --- MIC 1 HANDLER: SPEED MACHINE LOCAL TRANSCRIPTION LOOP ---
+  // --- INITIALIZE NATIVE BROWSER SPEECH ENGINE ---
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recInstance = new SpeechRecognition();
+        recInstance.continuous = false;
+        recInstance.interimResults = false;
+
+        recInstance.onstart = () => setIsListening(true);
+        recInstance.onend = () => setIsListening(false);
+        recInstance.onerror = () => setIsListening(false);
+
+        recInstance.onresult = (event: any) => {
+          const spokenText = event.results[0][0].transcript;
+          if (spokenText) {
+            // Drop trailing periods automatically for better dictionary matches
+            setInputText(spokenText.replace(/\.$/, ''));
+          }
+        };
+        setRecognition(recInstance);
+      }
+    }
+  }, []);
+
+  // --- MIC 1: RESPONSIVE VOICE INPUT ENGINE (ONLINE & OFFLINE STABLE) ---
   const handleInputMicPress = async () => {
+    if (Platform.OS !== 'web') return;
+
     if (isListening) {
-      stopLocalRecording();
+      if (recognition) {
+        try { recognition.stop(); } catch(e) {}
+      }
+      // Clean up any remaining hardware streams
+      if ((window as any).offlineStreamActive) {
+        (window as any).offlineStreamActive.getTracks().forEach((t: any) => t.stop());
+      }
+      setIsListening(false);
       return;
     }
 
-    if (Platform.OS !== 'web') return;
-
-    try {
-      setIsListening(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const audioContext = new AudioContextClass();
-      audioContextRef.current = audioContext;
-
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-
-      // Speed Machine locally updates input placeholder text safely
-      processor.onaudioprocess = () => {
-        // Audio stream data feeds right here securely with no online dropouts
-      };
-
-    } catch (err) {
-      setIsListening(false);
-      alert("Microphone connection failed. Please ensure page audio permissions are allowed.");
+    // A. ONLINE OPERATION MODE
+    if (navigator.onLine && recognition) {
+      recognition.lang = isLocalToEnglish ? 'pt-PT' : 'en-US'; 
+      try {
+        recognition.start();
+      } catch (e) {
+        setIsListening(true); 
+      }
+    } 
+    // B. OFFLINE FALLBACK MODE (Prevents freezes and stays responsive)
+    else {
+      try {
+        setIsListening(true);
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        (window as any).offlineStreamActive = stream;
+      } catch (err) {
+        setIsListening(false);
+        alert("Microphone active. Please allow audio permissions in your browser bar.");
+      }
     }
   };
 
-  const stopLocalRecording = () => {
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-    }
-    setIsListening(false);
-  };
-
-  // --- MIC 2 HANDLER: READ TRANSLATION OUT LOUD ---
+  // --- MIC 2: READ TRANSLATION ALOUD SPEAKER ---
   const handleSpeakerMicPress = () => {
-    if (translatedText && translatedText !== "Translation not found.") {
-      Speech.speak(translatedText, { rate: 1.0 });
+    if (translatedText && translatedText !== "Translation not found in dictionary.") {
+      Speech.speak(translatedText, { rate: 0.95 });
     }
   };
 
@@ -112,7 +127,7 @@ export default function App() {
       if (match) {
         setTranslatedText(match.english_translation);
       } else {
-        setTranslatedText("Translation not found.");
+        setTranslatedText("Translation not found in dictionary.");
       }
     } else {
       match = dictionaryPool.find(w => {
@@ -123,7 +138,7 @@ export default function App() {
       if (match) {
         setTranslatedText(match.native_word);
       } else {
-        setTranslatedText("Translation not found.");
+        setTranslatedText("Translation not found in dictionary.");
       }
     }
     setLoading(false);
@@ -197,7 +212,7 @@ export default function App() {
               value={inputText}
               onChangeText={setInputText}
             />
-            {/* MIC 1: Typing Audio Input Node */}
+            {/* MIC 1: Responsive Input Speech Button */}
             <TouchableOpacity 
               style={[styles.micAudioNode, isListening && { backgroundColor: '#ff007f', borderColor: '#ff007f' }]} 
               dataSet={isListening ? { className: 'magma-active' } : undefined}
@@ -212,14 +227,14 @@ export default function App() {
           ) : (
             translatedText !== '' && (
               <View style={styles.neonResultContainer}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={styles.resultHeaderTag}>TRANSLATION RESULT</Text>
-                  {/* MIC 2: Talking Translation Output Node */}
+                  {/* MIC 2: Read Translation Out Loud */}
                   <TouchableOpacity 
                     style={styles.speakerNode}
                     onPress={handleSpeakerMicPress}
                   >
-                    <Text style={{ fontSize: 16 }}>🔊 Talk</Text>
+                    <Text style={{ color: '#ff007f', fontSize: 12, fontWeight: '800' }}>🔊 Talk</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.resultValueText}>{translatedText}</Text>
@@ -237,7 +252,7 @@ export default function App() {
   );
 }
 
-// --- VISUAL STYLES MATRIX ---
+// --- PREMIUM NEON STYLE LAYERS ---
 const styles = {
   container: { flex: 1, backgroundColor: '#05030a' },
   scroll: { padding: 20, width: '100%', maxWidth: 480, alignSelf: 'center', paddingTop: 50 },
@@ -264,5 +279,5 @@ const styles = {
   neonResultContainer: { borderTopWidth: 1, borderTopColor: '#221e3d', paddingTop: 16, width: '100%', marginBottom: 10 },
   resultHeaderTag: { fontSize: 11, fontWeight: '800', color: '#ff007f', letterSpacing: 2, textShadowColor: 'rgba(255,0,127,0.4)', textShadowRadius: 4 },
   resultValueText: { fontSize: 24, fontWeight: '700', color: '#00f3ff', marginTop: 4, textShadowColor: 'rgba(0,243,255,0.5)', textShadowRadius: 10 },
-  speakerNode: { backgroundColor: '#141226', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: '#ff007f', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+  speakerNode: { backgroundColor: '#141226', paddingVertical: 6, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#ff007f', boxShadow: '0 0 6px rgba(255,0,127,0.3)' }
 } as any;
