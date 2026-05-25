@@ -176,4 +176,12 @@ const styles = StyleSheet.create({
   swapButtonText: { fontSize: 13, fontWeight: '700', color: '#2563eb' },
   inputCard: { backgroundColor: '#fff', width: '100%', borderRadius: 16, padding: 16, gap: 14 },
   textareaWrapper: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 100, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 12, backgroundColor: '#f9fafb' },
-  textInput: { flex: 1, fontSize: 16, color: '#1f2937', padding: 0, textAlignVertical: 'top', minHeight: 80 },
+  textInput: { flex: 1, fontSize: 16, color: '#1f2937', padding: 0, minHeight: 80 },
+  micButton: { backgroundColor: '#dbeafe', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  micIcon: { fontSize: 20 },
+  translateActionBtn: { backgroundColor: '#2563eb', width: '100%', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  translateActionBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  translationOutputBox: { borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 12, width: '100%' },
+  outputTextLabel: { fontSize: 12, fontWeight: '700', color: '#9ca3af', marginBottom: 2 },
+  outputTextValue: { fontSize: 18, fontWeight: '700', color: '#111827' }
+});
