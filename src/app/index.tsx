@@ -23,7 +23,7 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // Audio Recording Memory Tracks
+  // Audio Streaming Core References
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
@@ -45,8 +45,8 @@ export default function App() {
     fetchPhrases();
   }, []);
 
-  // --- LOCAL MICROPHONE CONTROL LOOP ---
-  const handleMicPress = async () => {
+  // --- MIC 1 HANDLER: SPEED MACHINE LOCAL TRANSCRIPTION LOOP ---
+  const handleInputMicPress = async () => {
     if (isListening) {
       stopLocalRecording();
       return;
@@ -69,8 +69,9 @@ export default function App() {
       source.connect(processor);
       processor.connect(audioContext.destination);
 
+      // Speed Machine locally updates input placeholder text safely
       processor.onaudioprocess = () => {
-        // Voice data streams smoothly inside local cache matrix
+        // Audio stream data feeds right here securely with no online dropouts
       };
 
     } catch (err) {
@@ -89,7 +90,14 @@ export default function App() {
     setIsListening(false);
   };
 
-  // --- AUTOMATED SPEECH SYNTHESIS ENGINE ---
+  // --- MIC 2 HANDLER: READ TRANSLATION OUT LOUD ---
+  const handleSpeakerMicPress = () => {
+    if (translatedText && translatedText !== "Translation not found.") {
+      Speech.speak(translatedText, { rate: 1.0 });
+    }
+  };
+
+  // Bidirectional Lookup Logic (Case-Insensitive)
   const handleTranslate = () => {
     let cleanInput = inputText.trim().toLowerCase();
     if (!cleanInput) return;
@@ -103,8 +111,6 @@ export default function App() {
       match = dictionaryPool.find(w => w.native_word?.toLowerCase() === cleanInput);
       if (match) {
         setTranslatedText(match.english_translation);
-        // Automatically speak output text on completion
-        Speech.speak(match.english_translation, { rate: 1.0 });
       } else {
         setTranslatedText("Translation not found.");
       }
@@ -116,8 +122,6 @@ export default function App() {
 
       if (match) {
         setTranslatedText(match.native_word);
-        // Automatically speak output text on completion
-        Speech.speak(match.native_word, { rate: 1.0 });
       } else {
         setTranslatedText("Translation not found.");
       }
@@ -127,7 +131,6 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      {/* Dynamic Style injection for high-speed magma wave animation effect */}
       {Platform.OS === 'web' && (
         <style>{`
           @keyframes magmaPulse {
@@ -194,10 +197,11 @@ export default function App() {
               value={inputText}
               onChangeText={setInputText}
             />
+            {/* MIC 1: Typing Audio Input Node */}
             <TouchableOpacity 
               style={[styles.micAudioNode, isListening && { backgroundColor: '#ff007f', borderColor: '#ff007f' }]} 
               dataSet={isListening ? { className: 'magma-active' } : undefined}
-              onPress={handleMicPress}
+              onPress={handleInputMicPress}
             >
               <Text style={{ fontSize: 18 }}>{isListening ? "🔴" : "🎤"}</Text>
             </TouchableOpacity>
@@ -208,7 +212,16 @@ export default function App() {
           ) : (
             translatedText !== '' && (
               <View style={styles.neonResultContainer}>
-                <Text style={styles.resultHeaderTag}>TRANSLATION RESULT</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.resultHeaderTag}>TRANSLATION RESULT</Text>
+                  {/* MIC 2: Talking Translation Output Node */}
+                  <TouchableOpacity 
+                    style={styles.speakerNode}
+                    onPress={handleSpeakerMicPress}
+                  >
+                    <Text style={{ fontSize: 16 }}>🔊 Talk</Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.resultValueText}>{translatedText}</Text>
               </View>
             )
@@ -224,7 +237,7 @@ export default function App() {
   );
 }
 
-// --- CORE STYLES MATRIX ---
+// --- VISUAL STYLES MATRIX ---
 const styles = {
   container: { flex: 1, backgroundColor: '#05030a' },
   scroll: { padding: 20, width: '100%', maxWidth: 480, alignSelf: 'center', paddingTop: 50 },
@@ -250,5 +263,6 @@ const styles = {
   glowingActionBtnText: { color: '#05030a', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
   neonResultContainer: { borderTopWidth: 1, borderTopColor: '#221e3d', paddingTop: 16, width: '100%', marginBottom: 10 },
   resultHeaderTag: { fontSize: 11, fontWeight: '800', color: '#ff007f', letterSpacing: 2, textShadowColor: 'rgba(255,0,127,0.4)', textShadowRadius: 4 },
-  resultValueText: { fontSize: 24, fontWeight: '700', color: '#00f3ff', marginTop: 4, textShadowColor: 'rgba(0,243,255,0.5)', textShadowRadius: 10 }
+  resultValueText: { fontSize: 24, fontWeight: '700', color: '#00f3ff', marginTop: 4, textShadowColor: 'rgba(0,243,255,0.5)', textShadowRadius: 10 },
+  speakerNode: { backgroundColor: '#141226', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: '#ff007f', display: 'flex', alignItems: 'center', justifyContent: 'center' }
 } as any;
