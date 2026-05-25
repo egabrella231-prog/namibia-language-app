@@ -45,7 +45,7 @@ export default function App() {
     fetchPhrases();
   }, []);
 
-  // --- SINGLE LOCAL MICROPHONE CONTROL LOOP ---
+  // --- LOCAL MICROPHONE CONTROL LOOP ---
   const handleMicPress = async () => {
     if (isListening) {
       stopLocalRecording();
@@ -59,7 +59,6 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
 
-      // Initialize browser local audio pipeline
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioContextClass();
       audioContextRef.current = audioContext;
@@ -70,10 +69,8 @@ export default function App() {
       source.connect(processor);
       processor.connect(audioContext.destination);
 
-      // Local Processing loop
-      processor.onaudioprocess = (e) => {
-        // Audio buffers pass purely through local browser tab memory here
-        // Zero external cloud endpoints are pinged, avoiding offline crashes
+      processor.onaudioprocess = () => {
+        // Voice data streams smoothly inside local cache matrix
       };
 
     } catch (err) {
@@ -92,7 +89,7 @@ export default function App() {
     setIsListening(false);
   };
 
-  // Bidirectional Lookup Logic (Case-Insensitive)
+  // --- AUTOMATED SPEECH SYNTHESIS ENGINE ---
   const handleTranslate = () => {
     let cleanInput = inputText.trim().toLowerCase();
     if (!cleanInput) return;
@@ -106,7 +103,8 @@ export default function App() {
       match = dictionaryPool.find(w => w.native_word?.toLowerCase() === cleanInput);
       if (match) {
         setTranslatedText(match.english_translation);
-        Speech.speak(match.english_translation);
+        // Automatically speak output text on completion
+        Speech.speak(match.english_translation, { rate: 1.0 });
       } else {
         setTranslatedText("Translation not found.");
       }
@@ -118,7 +116,8 @@ export default function App() {
 
       if (match) {
         setTranslatedText(match.native_word);
-        Speech.speak(match.native_word);
+        // Automatically speak output text on completion
+        Speech.speak(match.native_word, { rate: 1.0 });
       } else {
         setTranslatedText("Translation not found.");
       }
@@ -128,6 +127,20 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      {/* Dynamic Style injection for high-speed magma wave animation effect */}
+      {Platform.OS === 'web' && (
+        <style>{`
+          @keyframes magmaPulse {
+            0% { box-shadow: 0 0 5px #ff007f, 0 0 10px #ff007f; transform: scale(1); }
+            50% { box-shadow: 0 0 25px #ff007f, 0 0 35px #ff007f; transform: scale(1.12); }
+            100% { box-shadow: 0 0 5px #ff007f, 0 0 10px #ff007f; transform: scale(1); }
+          }
+          .magma-active {
+            animation: magmaPulse 0.4s infinite linear !important;
+          }
+        `}</style>
+      )}
+
       <ScrollView contentContainerStyle={styles.scroll}>
         
         <View style={styles.headerWrapper}>
@@ -182,7 +195,8 @@ export default function App() {
               onChangeText={setInputText}
             />
             <TouchableOpacity 
-              style={[styles.micAudioNode, isListening && { backgroundColor: '#ff007f', borderColor: '#ff007f', boxShadow: '0 0 15px #ff007f' }]} 
+              style={[styles.micAudioNode, isListening && { backgroundColor: '#ff007f', borderColor: '#ff007f' }]} 
+              dataSet={isListening ? { className: 'magma-active' } : undefined}
               onPress={handleMicPress}
             >
               <Text style={{ fontSize: 18 }}>{isListening ? "🔴" : "🎤"}</Text>
@@ -210,7 +224,7 @@ export default function App() {
   );
 }
 
-// --- DEEP NEON VISUAL STYLES ---
+// --- CORE STYLES MATRIX ---
 const styles = {
   container: { flex: 1, backgroundColor: '#05030a' },
   scroll: { padding: 20, width: '100%', maxWidth: 480, alignSelf: 'center', paddingTop: 50 },
@@ -231,7 +245,7 @@ const styles = {
   mainConsoleCard: { backgroundColor: '#0d0b18', width: '100%', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#221e3d', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' },
   interactiveInputRow: { flexDirection: 'row', alignItems: 'flex-start', minHeight: 90, padding: 4 },
   cleanTextArea: { flex: 1, fontSize: 17, color: '#ffffff', padding: 0, minHeight: 75, fontWeight: '600' },
-  micAudioNode: { backgroundColor: '#141226', width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginLeft: 10, borderWidth: 1, borderColor: '#00f3ff', boxShadow: '0 0 10px rgba(0,243,255,0.2)' },
+  micAudioNode: { backgroundColor: '#141226', width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginLeft: 10, borderWidth: 1, borderColor: '#00f3ff', transition: 'all 0.2s ease-in-out' },
   glowingActionBtn: { backgroundColor: '#00f3ff', width: '100%', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 14, boxShadow: '0 0 18px rgba(0,243,255,0.5)' },
   glowingActionBtnText: { color: '#05030a', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
   neonResultContainer: { borderTopWidth: 1, borderTopColor: '#221e3d', paddingTop: 16, width: '100%', marginBottom: 10 },
