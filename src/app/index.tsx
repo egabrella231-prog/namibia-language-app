@@ -67,8 +67,12 @@ export default function App() {
       )}
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Toloka</Text>
-        <TouchableOpacity style={styles.swapBtn} onPress={() => setIsLocalToEnglish(!isLocalToEnglish)}>
-          <Text style={{color: '#fff', textAlign: 'center'}}>{isLocalToEnglish ? 'Oshikwanyama ➔ English' : 'English ➔ Oshikwanyama'}</Text>
+        
+        {/* Updated Neon Toggle */}
+        <TouchableOpacity style={styles.neonSwapButton} onPress={() => setIsLocalToEnglish(!isLocalToEnglish)}>
+          <Text style={{color: '#fff', fontWeight: '800'}}>
+            {isLocalToEnglish ? 'Oshikwanyama ➔ English' : 'English ➔ Oshikwanyama'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.mainConsoleCard}>
@@ -104,7 +108,7 @@ const styles = {
   container: { flex: 1, backgroundColor: '#05030a' },
   scroll: { padding: 20, maxWidth: 480, alignSelf: 'center', paddingTop: 50 },
   title: { fontSize: 48, fontWeight: '900', color: '#ffffff', textAlign: 'center', marginBottom: 20 },
-  swapBtn: { padding: 10, borderColor: '#ff007f', borderWidth: 1, borderRadius: 20, marginBottom: 20 },
+  neonSwapButton: { padding: 12, borderColor: '#ff007f', borderWidth: 1, borderRadius: 20, marginBottom: 20, alignItems: 'center' },
   mainConsoleCard: { backgroundColor: '#0d0b18', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#221e3d' },
   cleanTextArea: { flex: 1, fontSize: 17, color: '#ffffff', minHeight: 75 },
   micAudioNode: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderColor: '#00f3ff', borderWidth: 1 },
