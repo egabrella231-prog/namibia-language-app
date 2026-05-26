@@ -11,7 +11,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
 
-  // Initialize Speech Recognition for Online Mode
   useEffect(() => {
     if (Platform.OS === 'web' && 'webkitSpeechRecognition' in window) {
       const rec = new (window as any).webkitSpeechRecognition();
@@ -23,23 +22,18 @@ export default function App() {
     }
   }, []);
 
-  // Handle Input Mic (Online/Offline)
   const handleInputMicPress = async () => {
     if (navigator.onLine && recognition) {
       setIsListening(true);
       recognition.start();
     } else {
-      // Offline mode logic
-      alert("Offline Mode: Microphone is ready for your input.");
+      alert("Offline Mode: Microphone is ready.");
       setIsListening(!isListening);
     }
   };
 
-  // Handle Output Mic (Text-to-Speech)
   const handleOutputMicPress = () => {
-    if (translatedText) {
-      Speech.speak(translatedText, { rate: 0.9 });
-    }
+    if (translatedText) Speech.speak(translatedText, { rate: 0.9 });
   };
 
   const handleTranslate = async () => {
@@ -48,7 +42,7 @@ export default function App() {
       if (!isLocalToEnglish) {
         const { data: mapping } = await supabase.from('translations').select('subject_root, verb_root, tense_prefix').eq('english_phrase', inputText.toLowerCase()).maybeSingle();
         if (mapping) {
-          const { data: result } = await supabase.rpc('build_full_sentence', { p_subject_noun: mapping.subject_root, p_verb: mapping.verb_root, p_tense: mapping.tense_prefix });
+          const { data: result } = await supabase.rpc('build_full_sentence', { p_subject_root: mapping.subject_root, p_verb: mapping.verb_root, p_tense: mapping.tense_prefix });
           setTranslatedText(result?.[0]?.full_sentence || "Engine Error");
         }
       } else {
@@ -61,15 +55,25 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      {Platform.OS === 'web' && (
+        <style>{`
+          @keyframes magmaPulse {
+            0% { box-shadow: 0 0 5px #00f3ff; }
+            50% { box-shadow: 0 0 20px #00f3ff; }
+            100% { box-shadow: 0 0 5px #00f3ff; }
+          }
+          .animate-neon { animation: magmaPulse 1.5s infinite alternate; }
+        `}</style>
+      )}
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Toloka</Text>
-        <TouchableOpacity onPress={() => setIsLocalToEnglish(!isLocalToEnglish)}>
-          <Text style={{color: '#fff', textAlign: 'center'}}>{isLocalToEnglish ? 'Native ➔ English' : 'English ➔ Native'}</Text>
+        <TouchableOpacity style={styles.swapBtn} onPress={() => setIsLocalToEnglish(!isLocalToEnglish)}>
+          <Text style={{color: '#fff', textAlign: 'center'}}>{isLocalToEnglish ? 'Oshikwanyama ➔ English' : 'English ➔ Oshikwanyama'}</Text>
         </TouchableOpacity>
 
         <View style={styles.mainConsoleCard}>
           <View style={{flexDirection: 'row', alignItems: 'center'}}>
-            <TextInput style={styles.cleanTextArea} value={inputText} onChangeText={setInputText} placeholder="Type or use mic..." />
+            <TextInput style={styles.cleanTextArea} value={inputText} onChangeText={setInputText} placeholder="Type or use mic..." placeholderTextColor="#4a4d61" />
             <TouchableOpacity style={styles.micAudioNode} onPress={handleInputMicPress}>
               <Text>{isListening ? "🔴" : "🎤"}</Text>
             </TouchableOpacity>
@@ -84,8 +88,11 @@ export default function App() {
             </View>
           ) : null}
 
-          <TouchableOpacity style={styles.glowingActionBtn} onPress={handleTranslate}>
-            <Text style={styles.glowingActionBtnText}>Translate</Text>
+          <TouchableOpacity 
+            style={[styles.glowingActionBtn, { className: 'animate-neon' } as any]} 
+            onPress={handleTranslate}
+          >
+            <Text style={styles.glowingActionBtnText}>{loading ? 'Translating...' : 'Translate'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -96,7 +103,8 @@ export default function App() {
 const styles = {
   container: { flex: 1, backgroundColor: '#05030a' },
   scroll: { padding: 20, maxWidth: 480, alignSelf: 'center', paddingTop: 50 },
-  title: { fontSize: 48, fontWeight: '900', color: '#ffffff', textAlign: 'center' },
+  title: { fontSize: 48, fontWeight: '900', color: '#ffffff', textAlign: 'center', marginBottom: 20 },
+  swapBtn: { padding: 10, borderColor: '#ff007f', borderWidth: 1, borderRadius: 20, marginBottom: 20 },
   mainConsoleCard: { backgroundColor: '#0d0b18', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#221e3d' },
   cleanTextArea: { flex: 1, fontSize: 17, color: '#ffffff', minHeight: 75 },
   micAudioNode: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderColor: '#00f3ff', borderWidth: 1 },
