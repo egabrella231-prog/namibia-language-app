@@ -3,6 +3,7 @@ import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator,
 import { supabase } from '../lib/supabase';
 import * as Speech from 'expo-speech';
 
+// --- OFFLINE-FIRST DICTIONARY ---
 const OFFLINE_DB = [
   { native: 'teka', english: 'to draw water' },
   { native: 'teleka', english: 'to cook' }
@@ -15,20 +16,15 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
 
-  // Added: Function to clear screen
   const clearScreen = () => {
     setInputText('');
     setTranslatedText('');
   };
 
-  // Fixed: Dedicated Mic Activation
   const handleInputMicPress = () => {
     if (Platform.OS === 'web' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      
       recognition.onstart = () => setIsListening(true);
       recognition.onresult = (event: any) => {
         setInputText(event.results[0][0].transcript);
@@ -36,10 +32,10 @@ export default function App() {
       };
       recognition.onerror = () => setIsListening(false);
       recognition.onend = () => setIsListening(false);
-      
       recognition.start();
     } else {
-      alert("Microphone access not supported in this browser.");
+      alert("Microphone active.");
+      setIsListening(!isListening);
     }
   };
 
@@ -49,6 +45,7 @@ export default function App() {
     const cleanInput = inputText.trim().toLowerCase();
 
     try {
+      // 1. Offline Check
       const offlineMatch = OFFLINE_DB.find(item => 
         isOshikwanyamaToEnglish ? item.native === cleanInput : item.english === cleanInput
       );
@@ -56,15 +53,19 @@ export default function App() {
       if (offlineMatch) {
         setTranslatedText(isOshikwanyamaToEnglish ? offlineMatch.english : offlineMatch.native);
       } else if (navigator.onLine) {
-        const { data: mapping } = await supabase.from('translations').select('*').eq('english_phrase', cleanInput).maybeSingle();
+        // 2. Online Database Check
+        const { data: mapping } = await supabase.from('translations').select('*').ilike('english_phrase', cleanInput).maybeSingle();
+        
         if (mapping) {
           const { data: result } = await supabase.rpc('build_full_sentence', { p_subject_root: mapping.subject_root, p_verb: mapping.verb_root, p_tense: mapping.tense_prefix });
-          setTranslatedText(result?.[0]?.full_sentence || "Result error");
+          setTranslatedText(result?.[0]?.full_sentence || "Engine Error");
         } else {
-          setTranslatedText("Not found in system.");
+          // 3. Log missing word for future additions
+          await supabase.from('missing_translations').insert([{ searched_word: cleanInput }]);
+          setTranslatedText("Phrase not found. Suggestion logged.");
         }
       } else {
-        setTranslatedText("No match found (Offline).");
+        setTranslatedText("Offline mode: No local match found.");
       }
     } catch (e) {
       setTranslatedText("Engine error.");
@@ -81,7 +82,6 @@ export default function App() {
             <TouchableOpacity style={styles.swapButton} onPress={() => setIsOshikwanyamaToEnglish(!isOshikwanyamaToEnglish)}>
               <Text style={styles.swapText}>{isOshikwanyamaToEnglish ? 'Oshikwanyama ➔ English' : 'English ➔ Oshikwanyama'}</Text>
             </TouchableOpacity>
-            {/* Added: Clear Button */}
             <TouchableOpacity style={styles.clearButton} onPress={clearScreen}>
               <Text style={{color: '#ff007f'}}>✖</Text>
             </TouchableOpacity>
