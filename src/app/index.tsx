@@ -15,19 +15,31 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
 
-  // Input Mic: Web Speech API for Online, simple toggle for Offline
+  // Added: Function to clear screen
+  const clearScreen = () => {
+    setInputText('');
+    setTranslatedText('');
+  };
+
+  // Fixed: Dedicated Mic Activation
   const handleInputMicPress = () => {
-    if (Platform.OS === 'web' && 'webkitSpeechRecognition' in window) {
-      const recognition = new (window as any).webkitSpeechRecognition();
+    if (Platform.OS === 'web' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      
       recognition.onstart = () => setIsListening(true);
       recognition.onresult = (event: any) => {
         setInputText(event.results[0][0].transcript);
         setIsListening(false);
       };
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+      
       recognition.start();
     } else {
-      alert("Offline Mode: Microphone ready.");
-      setIsListening(!isListening);
+      alert("Microphone access not supported in this browser.");
     }
   };
 
@@ -64,9 +76,16 @@ export default function App() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Toloka</Text>
-        <TouchableOpacity style={styles.swapButton} onPress={() => setIsOshikwanyamaToEnglish(!isOshikwanyamaToEnglish)}>
-          <Text style={styles.swapText}>{isOshikwanyamaToEnglish ? 'Oshikwanyama ➔ English' : 'English ➔ Oshikwanyama'}</Text>
-        </TouchableOpacity>
+        
+        <View style={{flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 20}}>
+            <TouchableOpacity style={styles.swapButton} onPress={() => setIsOshikwanyamaToEnglish(!isOshikwanyamaToEnglish)}>
+              <Text style={styles.swapText}>{isOshikwanyamaToEnglish ? 'Oshikwanyama ➔ English' : 'English ➔ Oshikwanyama'}</Text>
+            </TouchableOpacity>
+            {/* Added: Clear Button */}
+            <TouchableOpacity style={styles.clearButton} onPress={clearScreen}>
+              <Text style={{color: '#ff007f'}}>✖</Text>
+            </TouchableOpacity>
+        </View>
 
         <View style={styles.card}>
           <View style={styles.inputRow}>
@@ -96,7 +115,8 @@ const styles = {
   container: { flex: 1, backgroundColor: '#05030a' },
   scroll: { padding: 20, maxWidth: 480, alignSelf: 'center', paddingTop: 60 },
   title: { fontSize: 50, fontWeight: '900', color: '#fff', textAlign: 'center', marginBottom: 20 },
-  swapButton: { padding: 12, borderColor: '#ff007f', borderWidth: 1, borderRadius: 20, marginBottom: 20, alignItems: 'center' },
+  swapButton: { padding: 12, borderColor: '#ff007f', borderWidth: 1, borderRadius: 20, alignItems: 'center' },
+  clearButton: { padding: 12, borderColor: '#4a4d61', borderWidth: 1, borderRadius: 20, alignItems: 'center' },
   swapText: { color: '#fff', fontWeight: '800' },
   card: { backgroundColor: '#0d0b18', padding: 25, borderRadius: 20, borderWidth: 1, borderColor: '#221e3d' },
   inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
