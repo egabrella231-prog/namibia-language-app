@@ -125,7 +125,7 @@ export default function App() {
       localStorage.setItem('toloka_user_library', JSON.stringify(updatedLib));
     }
 
-    // Action B: Global Server Upstream Push
+    // Action B: Global Server Upstream Push explicitly aligned with RLS requirements
     if (navigator.onLine) {
       try {
         await supabase.from('universal_dictionary').insert([
