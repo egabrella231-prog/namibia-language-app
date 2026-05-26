@@ -251,4 +251,13 @@ const styles = {
   creationLabel: { color: '#ffffff', fontSize: 13, marginBottom: 8, fontWeight: '600' },
   customInput: { backgroundColor: '#1a1829', color: '#fff', padding: 12, borderRadius: 8, fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: '#221e3d' },
   saveWordButton: { backgroundColor: '#ff007f', padding: 12, borderRadius: 8, alignItems: 'center' },
-  saveWordText: { color: '#fff',
+  saveWordText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+
+  libraryPanel: { marginTop: 30, backgroundColor: '#0d0b18', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#221e3d' },
+  libraryTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 15 },
+  emptyText: { color: '#4a4d61', fontStyle: 'italic', fontSize: 14 },
+  libraryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1829' },
+  libEngText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  libNatText: { color: '#00f3ff', fontSize: 14, marginTop: 2 },
+  loadNode: { paddingVertical: 6, paddingHorizontal: 12, borderColor: '#00f3ff', borderWidth: 1, borderRadius: 8 }
+} as any;
