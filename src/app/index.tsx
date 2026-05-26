@@ -8,6 +8,7 @@ interface LibraryItem {
   oshikwanyama: string;
 }
 
+// --- SECURE STATIC OFFLINE FALLBACK DICTIONARY ---
 const OFFLINE_DB = [
   { native: 'teka', english: 'to draw water' },
   { native: 'teleka', english: 'to cook' }
@@ -20,10 +21,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
 
-  // --- USER PREFERRED DICTIONARY STORAGE ---
+  // --- PERSISTENT USER CUSTOM DICTIONARY SPACE ---
   const [userLibrary, setUserLibrary] = useState<LibraryItem[]>([]);
   const [customTranslation, setCustomTranslation] = useState('');
 
+  // Safeguard: Initialize local cache safely for browser environments
   useEffect(() => {
     if (Platform.OS === 'web') {
       const savedLib = localStorage.getItem('toloka_user_library');
@@ -31,12 +33,14 @@ export default function App() {
     }
   }, []);
 
+  // Operational Feature: Clear Button Input Reset
   const clearScreen = () => {
     setInputText('');
     setTranslatedText('');
     setCustomTranslation('');
   };
 
+  // Operational Feature: Input Mic Web Voice API Bridge
   const handleInputMicPress = () => {
     if (Platform.OS === 'web' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -54,18 +58,19 @@ export default function App() {
     }
   };
 
+  // Core Processing Engine: Three-Layer Translation Pipeline
   const handleTranslate = async () => {
     if (!inputText.trim()) return;
     setLoading(true);
     const cleanInput = inputText.trim().toLowerCase();
 
     try {
-      // 1. High Priority: Look through the user's saved library space first
+      // Layer 1: High Priority - User Created Local Contributions Cache
       const customMatch = userLibrary.find(item => 
         isOshikwanyamaToEnglish ? item.oshikwanyama.toLowerCase() === cleanInput : item.english.toLowerCase() === cleanInput
       );
 
-      // 2. Medium Priority: Main offline array lookup
+      // Layer 2: Medium Priority - Static Hardcoded Offline DB Array
       const offlineMatch = OFFLINE_DB.find(item => 
         isOshikwanyamaToEnglish ? item.native === cleanInput : item.english === cleanInput
       );
@@ -75,13 +80,20 @@ export default function App() {
       } else if (offlineMatch) {
         setTranslatedText(isOshikwanyamaToEnglish ? offlineMatch.english : offlineMatch.native);
       } else if (navigator.onLine) {
-        // 3. Low Priority: Supabase dynamic lookup fallback
-        const { data: mapping } = await supabase.from('translations').select('*').ilike('english_phrase', cleanInput).maybeSingle();
+        // Layer 3: Cloud Target - Live Universal Dictionary Table Sync Lookups
+        const targetColumn = isOshikwanyamaToEnglish ? 'native_word' : 'english_translation';
         
+        const { data: mapping } = await supabase
+          .from('universal_dictionary')
+          .select('native_word, english_translation')
+          .ilike(targetColumn, `%${cleanInput}%`)
+          .limit(1)
+          .maybeSingle();
+
         if (mapping) {
-          const { data: result } = await supabase.rpc('build_full_sentence', { p_subject_root: mapping.subject_root, p_verb: mapping.verb_root, p_tense: mapping.tense_prefix });
-          setTranslatedText(result?.[0]?.full_sentence || "Engine Error");
+          setTranslatedText(isOshikwanyamaToEnglish ? mapping.english_translation : mapping.native_word);
         } else {
+          // Fallback Strategy: Log missing word to collection table queue
           await supabase.from('missing_translations').insert([{ searched_word: cleanInput }]);
           setTranslatedText("Phrase not found. Suggestion logged.");
         }
@@ -94,7 +106,7 @@ export default function App() {
     setLoading(false);
   };
 
-  // NEW: Saves locally AND feeds the word back into the global database
+  // Database-Side Expansion Module: Double Action Sync Pipeline
   const handleSaveToPreferredSpace = async () => {
     if (!inputText.trim() || !customTranslation.trim()) return;
     
@@ -106,26 +118,25 @@ export default function App() {
       oshikwanyama: nativeWord
     };
 
-    // Update Local Workspace View immediately
+    // Action A: Local Memory Commit
     const updatedLib = [newItem, ...userLibrary];
     setUserLibrary(updatedLib);
     if (Platform.OS === 'web') {
       localStorage.setItem('toloka_user_library', JSON.stringify(updatedLib));
     }
 
-    // FEED BACK TO SUPABASE MASTER DATABASE
+    // Action B: Global Server Upstream Push
     if (navigator.onLine) {
       try {
-        await supabase.from('translations').insert([
+        await supabase.from('universal_dictionary').insert([
           { 
-            english_phrase: englishWord, 
-            verb_root: nativeWord, // Map straight to baseline root for user scaling
-            subject_root: '', 
-            tense_prefix: '' 
+            language_code: 'kwanyama',
+            native_word: nativeWord,
+            english_translation: englishWord
           }
         ]);
       } catch (dbError) {
-        console.log("Global sync paused, saved locally.");
+        console.log("Database upload bypassed. Saved locally.");
       }
     }
     
@@ -138,6 +149,7 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Toloka</Text>
         
+        {/* TOP INTERACTIVE CONTROL LAYER */}
         <View style={{flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 20}}>
           <TouchableOpacity style={styles.swapButton} onPress={() => setIsOshikwanyamaToEnglish(!isOshikwanyamaToEnglish)}>
             <Text style={styles.swapText}>{isOshikwanyamaToEnglish ? 'Oshikwanyama ➔ English' : 'English ➔ Oshikwanyama'}</Text>
@@ -147,6 +159,7 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
+        {/* PRIMARY PROCESSING CARD FRAME */}
         <View style={styles.card}>
           <View style={styles.inputRow}>
             <TextInput style={styles.input} value={inputText} onChangeText={setInputText} placeholder="Type or use mic..." placeholderTextColor="#4a4d61" />
@@ -159,7 +172,7 @@ export default function App() {
             <View style={styles.resultBox}>
               <Text style={styles.resultText}>{translatedText}</Text>
               
-              {/* Active Workspace Interaction Area */}
+              {/* CONDITIONAL ADDITION INTERACTIVE WORKSPACE PANEL */}
               {translatedText.includes("not found") && (
                 <View style={styles.creationPanel}>
                   <Text style={styles.creationLabel}>Contribute this translation to the Global App Database:</Text>
@@ -176,6 +189,7 @@ export default function App() {
                 </View>
               )}
 
+              {/* OUTPUT SPEAK SOUND TOOL */}
               <TouchableOpacity style={{marginTop: 10}} onPress={() => Speech.speak(translatedText)}>
                 <Text style={{color: '#ff007f'}}>🔊 Speak</Text>
               </TouchableOpacity>
@@ -187,7 +201,7 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* --- DYNAMIC WORKSPACE PREFERENCES PANEL --- */}
+        {/* --- DYNAMIC WORKSPACE CONTRIBUTIONS PREFERENCES PANEL --- */}
         <View style={styles.libraryPanel}>
           <Text style={styles.libraryTitle}>📁 My Contributions ({userLibrary.length})</Text>
           {userLibrary.length === 0 ? (
@@ -237,13 +251,4 @@ const styles = {
   creationLabel: { color: '#ffffff', fontSize: 13, marginBottom: 8, fontWeight: '600' },
   customInput: { backgroundColor: '#1a1829', color: '#fff', padding: 12, borderRadius: 8, fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: '#221e3d' },
   saveWordButton: { backgroundColor: '#ff007f', padding: 12, borderRadius: 8, alignItems: 'center' },
-  saveWordText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-
-  libraryPanel: { marginTop: 30, backgroundColor: '#0d0b18', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#221e3d' },
-  libraryTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 15 },
-  emptyText: { color: '#4a4d61', fontStyle: 'italic', fontSize: 14 },
-  libraryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1829' },
-  libEngText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  libNatText: { color: '#00f3ff', fontSize: 14, marginTop: 2 },
-  loadNode: { paddingVertical: 6, paddingHorizontal: 12, borderColor: '#00f3ff', borderWidth: 1, borderRadius: 8 }
-} as any;
+  saveWordText: { color: '#fff',
