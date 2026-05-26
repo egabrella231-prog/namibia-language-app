@@ -94,21 +94,41 @@ export default function App() {
     setLoading(false);
   };
 
-  const handleSaveToPreferredSpace = () => {
+  // NEW: Saves locally AND feeds the word back into the global database
+  const handleSaveToPreferredSpace = async () => {
     if (!inputText.trim() || !customTranslation.trim()) return;
     
+    const englishWord = isOshikwanyamaToEnglish ? customTranslation.trim().toLowerCase() : inputText.trim().toLowerCase();
+    const nativeWord = isOshikwanyamaToEnglish ? inputText.trim().toLowerCase() : customTranslation.trim().toLowerCase();
+
     const newItem: LibraryItem = {
-      english: isOshikwanyamaToEnglish ? customTranslation.trim() : inputText.trim(),
-      oshikwanyama: isOshikwanyamaToEnglish ? inputText.trim() : customTranslation.trim()
+      english: englishWord,
+      oshikwanyama: nativeWord
     };
 
+    // Update Local Workspace View immediately
     const updatedLib = [newItem, ...userLibrary];
     setUserLibrary(updatedLib);
     if (Platform.OS === 'web') {
       localStorage.setItem('toloka_user_library', JSON.stringify(updatedLib));
     }
+
+    // FEED BACK TO SUPABASE MASTER DATABASE
+    if (navigator.onLine) {
+      try {
+        await supabase.from('translations').insert([
+          { 
+            english_phrase: englishWord, 
+            verb_root: nativeWord, // Map straight to baseline root for user scaling
+            subject_root: '', 
+            tense_prefix: '' 
+          }
+        ]);
+      } catch (dbError) {
+        console.log("Global sync paused, saved locally.");
+      }
+    }
     
-    // Switch view right away to show the newly assigned text value
     setTranslatedText(isOshikwanyamaToEnglish ? newItem.english : newItem.oshikwanyama);
     setCustomTranslation('');
   };
@@ -142,7 +162,7 @@ export default function App() {
               {/* Active Workspace Interaction Area */}
               {translatedText.includes("not found") && (
                 <View style={styles.creationPanel}>
-                  <Text style={styles.creationLabel}>Assign custom meaning to your personal workspace:</Text>
+                  <Text style={styles.creationLabel}>Contribute this translation to the Global App Database:</Text>
                   <TextInput 
                     style={styles.customInput} 
                     value={customTranslation} 
@@ -151,7 +171,7 @@ export default function App() {
                     placeholderTextColor="#636885"
                   />
                   <TouchableOpacity style={styles.saveWordButton} onPress={handleSaveToPreferredSpace}>
-                    <Text style={styles.saveWordText}>✔ Add to Workspace</Text>
+                    <Text style={styles.saveWordText}>✔ Contribute & Save Word</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -169,9 +189,9 @@ export default function App() {
 
         {/* --- DYNAMIC WORKSPACE PREFERENCES PANEL --- */}
         <View style={styles.libraryPanel}>
-          <Text style={styles.libraryTitle}>📁 Saved Preferences ({userLibrary.length})</Text>
+          <Text style={styles.libraryTitle}>📁 My Contributions ({userLibrary.length})</Text>
           {userLibrary.length === 0 ? (
-            <Text style={styles.emptyText}>Custom overrides or unique vocabulary configurations live here.</Text>
+            <Text style={styles.emptyText}>Words you add to the global network database will appear here.</Text>
           ) : (
             <ScrollView style={{maxHeight: 220}} nestedScrollEnabled={true}>
               {userLibrary.map((item, idx) => (
