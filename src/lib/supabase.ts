@@ -1,13 +1,16 @@
-import 'react-native-url-polyfill/auto';
+import { createClient } from '@supabase/supabase-with-rc-auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+// Your dedicated Supabase Project URL from your dashboard screenshot
+const PROJECT_URL = "https://lrvvnuzthpwsbhmxtkvh.supabase.co";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("Environment variables are missing! Check your root .env file.");
-}
+// Read from process environment safely, or fall back to your public sandbox defaults
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || PROJECT_URL;
+
+// IMPORTANT: Replace the placeholder text below with your actual API key 
+// if GitHub Secrets are not injecting into your web preview port.
+const DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxydnZudXp0aHB3c2JobXh0a3ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNDEwNjIsImV4cCI6MjA5NDkxNzA2Mn0.B2TQ_G-9QzPxV9dd-fnjDtBKxiJDdVSdoXt9yg2jqUg";
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
