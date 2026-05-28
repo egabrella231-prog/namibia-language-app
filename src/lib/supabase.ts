@@ -1,14 +1,11 @@
-import { createClient } from '@supabase/supabase-with-rc-auth';
+// Swapped package import to standard library to resolve bundler failure
+import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Your dedicated Supabase Project URL from your dashboard screenshot
 const PROJECT_URL = "https://lrvvnuzthpwsbhmxtkvh.supabase.co";
-
-// Read from process environment safely, or fall back to your public sandbox defaults
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || PROJECT_URL;
 
-// IMPORTANT: Replace the placeholder text below with your actual API key 
-// if GitHub Secrets are not injecting into your web preview port.
+// Using your client-safe public fallback anon token string
 const DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxydnZudXp0aHB3c2JobXh0a3ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNDEwNjIsImV4cCI6MjA5NDkxNzA2Mn0.B2TQ_G-9QzPxV9dd-fnjDtBKxiJDdVSdoXt9yg2jqUg";
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_ANON_KEY;
 
