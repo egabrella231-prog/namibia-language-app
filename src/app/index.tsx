@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
@@ -227,7 +225,7 @@ export default function App() {
 
       const { data: verbData } = await supabase
         .from('universal_dictionary')
-        .select('native_word, pos_tag')
+        .select('native_word, pos_tag, terminal_vowel_mutation') // Added terminal_vowel_mutation here
         .eq('native_word', testVerb)
         .maybeSingle();
 
@@ -243,7 +241,15 @@ export default function App() {
             ? concordRules.present_continuous_concord 
             : concordRules.past_tense_concord;
 
-          const fullNativeSentence = `${nounData.native_word} ${structuralConcord} ${verbData.native_word}`;
+          // --- DYNAMIC TERMINAL VOWEL MUTATION PROCESSING BLOCK ---
+          let processedVerb = verbData.native_word;
+          if (testTense === 'present' && verbData.terminal_vowel_mutation === 'mutates_to_e_in_present') {
+            if (processedVerb.endsWith('a')) {
+              processedVerb = processedVerb.slice(0, -1) + 'e'; // Mutates -a to -e (e.g., teleka -> teleke)
+            }
+          }
+
+          const fullNativeSentence = `${nounData.native_word} ${structuralConcord} ${processedVerb}`;
           const fullEnglishMeaning = testTense === 'present'
             ? `The ${nounData.native_word} is actively doing: ${verbData.native_word}ing`
             : `The ${nounData.native_word} completed doing: ${verbData.native_word}`;
