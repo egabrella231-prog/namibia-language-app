@@ -27,12 +27,19 @@ export default function App() {
   const [testVerb, setTestVerb] = useState('teleka');
   const [testTense, setTestTense] = useState('present'); // present or past
   const [sandboxResult, setSandboxResult] = useState('');
+  const [wordRules, setWordRules] = useState<any[]>([]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
       const savedLib = localStorage.getItem('toloka_user_library');
       if (savedLib) setUserLibrary(JSON.parse(savedLib));
     }
+
+    const fetchWordRules = async () => {
+      const { data } = await supabase.from('word_rules_matrix').select('*');
+      if (data) setWordRules(data);
+    };
+    fetchWordRules();
   }, []);
 
   const clearScreen = () => {
@@ -158,7 +165,23 @@ export default function App() {
       } else {
         const deepAssembledResult = await processComplexSentence(inputText.trim(), isOshikwanyamaToEnglish);
         if (deepAssembledResult) {
-          setTranslatedText(deepAssembledResult);
+          // --- RUN MORPHOSYNTACTIC ZIMMERMAN MATRIX RULES FOR INDIVIDUAL VERBS ---
+          let finalDisplayOutput = deepAssembledResult;
+          const isPresentContinuous = finalDisplayOutput.includes('ota');
+
+          wordRules.forEach((rule) => {
+            if (finalDisplayOutput.includes(rule.native_base)) {
+              if (!rule.is_invariable) {
+                if (isPresentContinuous) {
+                  finalDisplayOutput = finalDisplayOutput.replace(rule.native_base, rule.present_mutation);
+                } else {
+                  finalDisplayOutput = finalDisplayOutput.replace(rule.native_base, rule.past_mutation);
+                }
+              }
+            }
+          });
+
+          setTranslatedText(finalDisplayOutput);
         } else {
           setTranslatedText("Phrase not found. Context loaded into the open networks panel.");
         }
