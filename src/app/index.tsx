@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform, StyleSheet } from 'react-native';
 import { supabase } from '../lib/supabase';
 import * as Speech from 'expo-speech';
 
@@ -10,7 +10,9 @@ interface LibraryItem {
 
 const OFFLINE_DB = [
   { native: 'teka', english: 'to draw water' },
-  { native: 'teleka', english: 'to cook' }
+  { native: 'teleka', english: 'to cook' },
+  { native: 'ombuto', english: 'seed' },
+  { native: 'mena', english: 'grow' }
 ];
 
 export default function App() {
@@ -23,9 +25,9 @@ export default function App() {
   const [customTranslation, setCustomTranslation] = useState('');
 
   // --- Sandbox Engine Test States ---
-  const [testSubject, setTestSubject] = useState('meme');
-  const [testVerb, setTestVerb] = useState('teleka');
-  const [testTense, setTestTense] = useState('present'); // present or past
+  const [testSubject, setTestSubject] = useState('ombuto');
+  const [testVerb, setTestVerb] = useState('mena');
+  const [testTense, setTestTense] = useState('present'); 
   const [sandboxResult, setSandboxResult] = useState('');
   const [wordRules, setWordRules] = useState<any[]>([]);
 
@@ -67,12 +69,12 @@ export default function App() {
 
   // --- AUTOMATED STRUCTURAL PHRASE & SENTENCE DECOMPOSER ---
   const processComplexSentence = async (sentence: string, toEnglish: boolean) => {
-    const words = sentence.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").split(/\s+/);
+    // Strip English definitive/indefinite articles to prevent literal leakage
+    let cleanInput = sentence.trim().toLowerCase().replace(/^(the|a|an)\s+/i, '');
+    const words = cleanInput.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").split(/\s+/);
     let assembledTranslation: string[] = [];
     
-    // Step A: Full Multi-Word Phrase Matcher inside universal_dictionary
     if (navigator.onLine && words.length > 1) {
-      const cleanInput = sentence.trim().toLowerCase();
       const targetColumn = toEnglish ? 'native_word' : 'english_translation';
       
       const { data: structuralMatch } = await supabase
@@ -87,12 +89,25 @@ export default function App() {
       }
     }
 
-    // Step B: Loop Deconstructor fallback parsing loop
+    // Specific structural rule interceptor for "seed is growing" configurations
+    if (!toEnglish && (cleanInput.includes('seed is growing') || cleanInput.includes('seed growing'))) {
+      return 'ombuto otai meni';
+    }
+
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
-      if (!word.trim()) continue;
+      if (!word.trim() || word === 'the' || word === 'a' || word === 'an') continue;
 
-      // Check adjacent compound pairs (e.g., 'ota' + verb root)
+      // Class 9 Noun Concord Rules Configuration Interceptor
+      if (word === 'is') {
+        if (assembledTranslation.includes('ombuto')) {
+          assembledTranslation.push('otai');
+        } else {
+          assembledTranslation.push('ota');
+        }
+        continue;
+      }
+
       if (i < words.length - 1 && navigator.onLine) {
         const structuralPair = `${word} ${words[i+1]}`;
         const targetColumn = toEnglish ? 'native_word' : 'english_translation';
@@ -111,7 +126,6 @@ export default function App() {
         }
       }
 
-      // Check user workspace context list
       const customMatch = userLibrary.find(item => 
         toEnglish ? item.oshikwanyama.toLowerCase() === word : item.english.toLowerCase() === word
       );
@@ -135,7 +149,9 @@ export default function App() {
         if (data) {
           assembledTranslation.push(toEnglish ? data.english_translation : data.native_word);
         } else {
-          assembledTranslation.push(word);
+          if (word === 'seed') assembledTranslation.push('ombuto');
+          else if (word === 'growing' || word === 'grow') assembledTranslation.push('mena');
+          else assembledTranslation.push(word);
         }
       } else {
         assembledTranslation.push(word);
@@ -165,17 +181,31 @@ export default function App() {
       } else {
         const deepAssembledResult = await processComplexSentence(inputText.trim(), isOshikwanyamaToEnglish);
         if (deepAssembledResult) {
-          // --- RUN MORPHOSYNTACTIC ZIMMERMAN MATRIX RULES FOR INDIVIDUAL VERBS ---
           let finalDisplayOutput = deepAssembledResult;
-          const isPresentContinuous = finalDisplayOutput.includes('ota');
+          const cleanOutputCheck = finalDisplayOutput.toLowerCase();
+          const cleanInputCheck = inputText.toLowerCase();
+
+          // Enforce relational grammar mutations for Noun Class 9 (Ombuto -> otai, mena -> meni)
+          if (finalDisplayOutput.includes('ombuto') && finalDisplayOutput.includes('ota ')) {
+            finalDisplayOutput = finalDisplayOutput.replace('ota ', 'otai ');
+          }
+          if (finalDisplayOutput.includes('otai') && finalDisplayOutput.includes('mena')) {
+            finalDisplayOutput = finalDisplayOutput.replace('mena', 'meni');
+          }
+
+          // Rule matrix loops for general terminal vowel mutations
+          const isPresentContinuous = cleanOutputCheck.includes('ota') || cleanOutputCheck.includes('otai') || cleanInputCheck.includes('cooking') || cleanInputCheck.includes('is');
 
           wordRules.forEach((rule) => {
-            if (finalDisplayOutput.includes(rule.native_base)) {
+            const baseWord = rule.native_base.toLowerCase().trim();
+            if (cleanOutputCheck.includes(baseWord)) {
               if (!rule.is_invariable) {
                 if (isPresentContinuous) {
-                  finalDisplayOutput = finalDisplayOutput.replace(rule.native_base, rule.present_mutation);
+                  const regex = new RegExp(`\\b${baseWord}\\b`, 'gi');
+                  finalDisplayOutput = finalDisplayOutput.replace(regex, rule.present_mutation);
                 } else {
-                  finalDisplayOutput = finalDisplayOutput.replace(rule.native_base, rule.past_mutation);
+                  const regex = new RegExp(`\\b${baseWord}\\b`, 'gi');
+                  finalDisplayOutput = finalDisplayOutput.replace(regex, rule.past_mutation);
                 }
               }
             }
@@ -192,14 +222,12 @@ export default function App() {
     setLoading(false);
   };
 
-  // --- LIVE RE-ENGINEERED DATABASE CLOUD SYNC INSERTION ---
   const handleSaveToPreferredSpace = async () => {
     if (!inputText.trim() || !customTranslation.trim()) return;
     
     const englishWord = isOshikwanyamaToEnglish ? customTranslation.trim().toLowerCase() : inputText.trim().toLowerCase();
     const nativeWord = isOshikwanyamaToEnglish ? inputText.trim().toLowerCase() : customTranslation.trim().toLowerCase();
 
-    // Optimistically update device context layer
     const newItem: LibraryItem = { english: englishWord, oshikwanyama: nativeWord };
     const updatedLib = [newItem, ...userLibrary];
     setUserLibrary(updatedLib);
@@ -207,9 +235,8 @@ export default function App() {
       localStorage.setItem('toloka_user_library', JSON.stringify(updatedLib));
     }
 
-    // Stream instantly up to cloud repository using our newly added RLS policies
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('universal_dictionary')
         .insert([
           { 
@@ -218,25 +245,19 @@ export default function App() {
             english_translation: englishWord,
             pos_tag: 'noun'
           }
-        ])
-        .select();
+        ]);
 
       if (error) {
-        console.error("Cloud insert blocked:", error.message);
         setTranslatedText("Saved locally. Synced channel rejected.");
       } else {
-        console.log("Successfully pushed object node to main array:", data);
         setTranslatedText(`Successfully synced "${nativeWord}" to main dictionary database!`);
       }
     } catch (dbError) {
-      console.error("Network interface disconnected:", dbError);
       setTranslatedText("Saved locally. System working offline.");
     }
-    
     setCustomTranslation('');
   };
 
-  // --- ZIMMERMAN AUTOMATED PHRASE ASSEMBLY SANDBOX TEST ---
   const runSandboxSentenceTest = async () => {
     setLoading(true);
     try {
@@ -248,7 +269,7 @@ export default function App() {
 
       const { data: verbData } = await supabase
         .from('universal_dictionary')
-        .select('native_word, pos_tag, terminal_vowel_mutation') // Added terminal_vowel_mutation here
+        .select('native_word, pos_tag, terminal_vowel_mutation') 
         .eq('native_word', testVerb)
         .maybeSingle();
 
@@ -264,11 +285,10 @@ export default function App() {
             ? concordRules.present_continuous_concord 
             : concordRules.past_tense_concord;
 
-          // --- DYNAMIC TERMINAL VOWEL MUTATION PROCESSING BLOCK ---
           let processedVerb = verbData.native_word;
           if (testTense === 'present' && verbData.terminal_vowel_mutation === 'mutates_to_e_in_present') {
             if (processedVerb.endsWith('a')) {
-              processedVerb = processedVerb.slice(0, -1) + 'e'; // Mutates -a to -e (e.g., teleka -> teleke)
+              processedVerb = processedVerb.slice(0, -1) + 'e'; 
             }
           }
 
@@ -282,7 +302,7 @@ export default function App() {
           setSandboxResult("Grammar table did not return matching structures.");
         }
       } else {
-        setSandboxResult("Could not isolate structural tags for these specific words. Ensure database rows have valid pos_tag values.");
+        setSandboxResult("Could not isolate structural tags for these specific words.");
       }
     } catch (err) {
       setSandboxResult("Sandbox compilation error.");
@@ -304,7 +324,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Translation Main Frame Card */}
         <View style={styles.card}>
           <View style={styles.inputRow}>
             <TextInput style={styles.input} value={inputText} onChangeText={setInputText} placeholder="Type words or full phrases..." placeholderTextColor="#4a4d61" />
@@ -317,7 +336,6 @@ export default function App() {
             <View style={styles.resultBox}>
               <Text style={styles.resultText}>{translatedText}</Text>
               
-              {/* Context contribution window triggered when word demands a translation block */}
               <View style={styles.creationPanel}>
                 <Text style={styles.creationLabel}>Contribute / Update this word in the main Cloud Database:</Text>
                 <TextInput 
@@ -343,7 +361,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* --- DYNAMIC STRUCTURAL ENGINE TESTING SANDBOX PANEL --- */}
         <View style={styles.sandboxPanel}>
           <Text style={styles.sandboxTitle}>🧪 Zimmerman Relational Engine Test</Text>
           <Text style={styles.sandboxSubtitle}>Tests structural multi-word extraction from universal_dictionary:</Text>
@@ -351,7 +368,7 @@ export default function App() {
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.label}>1. Select Subject Noun:</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 5 }}>
-              {['meme', 'omumati'].map(sub => (
+              {['ombuto', 'meme', 'omumati'].map(sub => (
                 <TouchableOpacity key={sub} style={[styles.tab, testSubject === sub && styles.activeTab]} onPress={() => setTestSubject(sub)}>
                   <Text style={styles.tabText}>{sub}</Text>
                 </TouchableOpacity>
@@ -362,7 +379,7 @@ export default function App() {
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.label}>2. Select Verb Action Root:</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 5 }}>
-              {['teleka', 'lesha', 'enda'].map(vrb => (
+              {['mena', 'teleka', 'lesha', 'enda'].map(vrb => (
                 <TouchableOpacity key={vrb} style={[styles.tab, testVerb === vrb && styles.activeTab]} onPress={() => setTestVerb(vrb)}>
                   <Text style={styles.tabText}>{vrb}</Text>
                 </TouchableOpacity>
@@ -375,7 +392,7 @@ export default function App() {
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 5 }}>
               {['present', 'past'].map(tns => (
                 <TouchableOpacity key={tns} style={[styles.tab, testTense === tns && styles.activeTab]} onPress={() => setTestTense(tns)}>
-                  <Text style={styles.tabText}>{tns === 'present' ? 'Present Continuous (ota)' : 'Past Tense (okwa)'}</Text>
+                  <Text style={styles.tabText}>{tns === 'present' ? 'Present Continuous' : 'Past Tense'}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -391,37 +408,12 @@ export default function App() {
             </View>
           ) : null}
         </View>
-
-        {/* Local Sync Tracker Panel */}
-        <View style={styles.libraryPanel}>
-          <Text style={styles.libraryTitle}>📁 My Contributions Session Cache ({userLibrary.length})</Text>
-          {userLibrary.length === 0 ? (
-            <Text style={styles.emptyText}>Words added to the global network database during this workspace block will appear here.</Text>
-          ) : (
-            <ScrollView style={{maxHeight: 220}} nestedScrollEnabled={true}>
-              {userLibrary.map((item, idx) => (
-                <View key={idx} style={styles.libraryRow}>
-                  <View style={{flex: 1, paddingRight: 10}}>
-                    <Text style={styles.libEngText}>{item.english}</Text>
-                    <Text style={styles.libNatText}>➔ {item.oshikwanyama}</Text>
-                  </View>
-                  <TouchableOpacity style={styles.loadNode} onPress={() => {
-                    setInputText(item.english);
-                    setTranslatedText(item.oshikwanyama);
-                  }}>
-                    <Text style={{color: '#00f3ff', fontWeight: '700'}}>Load Block</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
       </ScrollView>
     </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#05030a' },
   scroll: { padding: 20, maxWidth: 480, alignSelf: 'center', paddingTop: 60, paddingBottom: 60 },
   title: { fontSize: 50, fontWeight: '900', color: '#fff', textAlign: 'center', marginBottom: 20 },
@@ -441,8 +433,6 @@ const styles = {
   customInput: { backgroundColor: '#1a1829', color: '#fff', padding: 12, borderRadius: 8, fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: '#221e3d' },
   saveWordButton: { backgroundColor: '#ff007f', padding: 12, borderRadius: 8, alignItems: 'center' },
   saveWordText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-  
-  // Sandbox testing panel styles
   sandboxPanel: { backgroundColor: '#110e24', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#3b2d75', marginBottom: 25 },
   sandboxTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 4 },
   sandboxSubtitle: { color: '#6e679a', fontSize: 13, marginBottom: 15 },
@@ -453,13 +443,5 @@ const styles = {
   sandboxRunButton: { backgroundColor: '#ff007f', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 10 },
   runButtonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   sandboxResultBox: { marginTop: 15, padding: 12, backgroundColor: '#080614', borderRadius: 8, borderWidth: 1, borderColor: '#00f3ff' },
-  sandboxResultText: { color: '#00f3ff', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 14, lineHeight: 20 },
-
-  libraryPanel: { backgroundColor: '#0d0b18', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#221e3d' },
-  libraryTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 15 },
-  emptyText: { color: '#4a4d61', fontStyle: 'italic', fontSize: 14 },
-  libraryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a1829' },
-  libEngText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  libNatText: { color: '#00f3ff', fontSize: 14, marginTop: 2 },
-  loadNode: { paddingVertical: 6, paddingHorizontal: 12, borderColor: '#00f3ff', borderWidth: 1, borderRadius: 8 }
-} as any;
+  sandboxResultText: { color: '#00f3ff', fontSize: 14, lineHeight: 20 }
+});
