@@ -1,4 +1,3 @@
-```tsx
 import React, { useState, useEffect } from 'react';
 import { Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform, StyleSheet } from 'react-native';
 import { supabase } from '../lib/supabase';
@@ -69,7 +68,7 @@ export default function App() {
 
   const processComplexSentence = async (sentence: string, toEnglish: boolean) => {
     let cleanInput = sentence.trim().toLowerCase().replace(/^(the|a|an)\s+/i, '');
-    const words = cleanInput.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").split(/\s+/);
+    const words = cleanInput.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").split(/\s+/);
     let assembledTranslation: string[] = [];
     
     if (navigator.onLine && words.length > 1) {
@@ -130,7 +129,7 @@ export default function App() {
       const cleanInput = inputText.trim().toLowerCase();
       const targetColumn = isOshikwanyamaToEnglish ? 'native_word' : 'english_translation';
       
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('universal_dictionary')
         .select(`
           native_word, 
@@ -294,5 +293,3 @@ const styles = StyleSheet.create({
   runButtonText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   sandboxResultText: { color: '#00f3ff', marginTop: 15, fontSize: 14 }
 });
-
-```
