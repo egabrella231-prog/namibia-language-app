@@ -156,24 +156,43 @@ assembledTranslation.push(word);
 }
 
 return assembledTranslation.length > 0 ? assembledTranslation.join(' ') : null;
-};
-
-const handleTranslate = async () => {
+};const handleTranslate = async () => {
   if (!inputText.trim()) return;
   setLoading(true);
   try {
     const cleanInput = inputText.trim().toLowerCase();
     
-    // JOIN universal_dictionary with grammar_rules based on your table structure
+    // Updated to match your database column names exactly:
     const { data, error } = await supabase
       .from('universal_dictionary')
       .select(`
         native_word, 
         english_translation,
-        grammar_rules (present_concord, past_concord)
+        grammar_rules (
+          present_continuous_concord, 
+          past_tense_concord
+        )
       `)
       .ilike(isOshikwanyamaToEnglish ? 'native_word' : 'english_translation', cleanInput)
       .maybeSingle();
+
+    if (data) {
+      // Accessing the rules using the correct database field names
+      const rule = data.grammar_rules;
+      const display = rule 
+        ? `${data.native_word} (Rule: ${rule.present_continuous_concord})` 
+        : data.native_word;
+      setTranslatedText(isOshikwanyamaToEnglish ? data.english_translation : display);
+    } else {
+      // Fallback to existing processor if not found via direct join
+      const result = await processComplexSentence(inputText.trim(), isOshikwanyamaToEnglish);
+      setTranslatedText(result || "Word not found.");
+    }
+  } catch (e) {
+    setTranslatedText("Engine parsing conflict.");
+  }
+  setLoading(false);
+};
 
     if (data) {
       // Logic uses the concord returned directly from your grammar_rules table
@@ -242,7 +261,7 @@ const englishWord = isOshikwanyamaToEnglish ? customTranslation.trim().toLowerCa
 const nativeWord = isOshikwanyamaToEnglish ? inputText.trim().toLowerCase() : customTranslation.trim().toLowerCase();
 
 const newItem: LibraryItem = { english: englishWord, oshikwanyama: nativeWord };
-const updatedLib = [newItem, ...userLibrary];
+const updatedLib = [tm.newItem, ...userLibrary];
 setUserLibrary(updatedLib);
 if (Platform.OS === 'web') {
 localStorage.setItem('toloka_user_library', JSON.stringify(updatedLib));
