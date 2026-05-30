@@ -89,7 +89,7 @@ return toEnglish ? structuralMatch.english_translation : structuralMatch.native_
 
 // Specific structural rule interceptor for "seed is growing" configurations
 if (!toEnglish && (cleanInput.includes('seed is growing') || cleanInput.includes('seed growing'))) {
-return 'ombuto otai meni';
+return 'ombuto otai mene';
 }
 
 for (let i = 0; i < words.length; i++) {
@@ -159,17 +159,36 @@ return assembledTranslation.length > 0 ? assembledTranslation.join(' ') : null;
 };
 
 const handleTranslate = async () => {
-if (!inputText.trim()) return;
-setLoading(true);
-try {
-const cleanInput = inputText.trim().toLowerCase();
-const targetColumn = isOshikwanyamaToEnglish ? 'native_word' : 'english_translation';
-const { data: directMapping } = await supabase
-.from('universal_dictionary')
-.select('native_word, english_translation')
-.ilike(targetColumn, cleanInput)
-.limit(1)
-.maybeSingle();
+  if (!inputText.trim()) return;
+  setLoading(true);
+  try {
+    const cleanInput = inputText.trim().toLowerCase();
+    
+    // JOIN universal_dictionary with grammar_rules based on your table structure
+    const { data, error } = await supabase
+      .from('universal_dictionary')
+      .select(`
+        native_word, 
+        english_translation,
+        grammar_rules (present_concord, past_concord)
+      `)
+      .ilike(isOshikwanyamaToEnglish ? 'native_word' : 'english_translation', cleanInput)
+      .maybeSingle();
+
+    if (data) {
+      // Logic uses the concord returned directly from your grammar_rules table
+      const result = isOshikwanyamaToEnglish 
+        ? data.english_translation 
+        : `${data.native_word} ${data.grammar_rules?.present_concord || ''}`;
+      setTranslatedText(result);
+    } else {
+      setTranslatedText("Phrase not found in database.");
+    }
+  } catch (e) {
+    setTranslatedText("Engine parsing conflict.");
+  }
+  setLoading(false);
+};
 
 if (directMapping) {
 setTranslatedText(isOshikwanyamaToEnglish ? directMapping.english_translation : directMapping.native_word);
@@ -180,7 +199,7 @@ let finalDisplayOutput = deepAssembledResult;
 const cleanOutputCheck = finalDisplayOutput.toLowerCase();
 const cleanInputCheck = inputText.toLowerCase();
 
-// Enforce relational grammar mutations for Noun Class 9 (Ombuto -> otai, mena -> meni)
+// Enforce relational grammar mutations for Noun Class 9 (Ombuto -> otai, mena -> mene)
 if (finalDisplayOutput.includes('ombuto') && finalDisplayOutput.includes('ota ')) {
 finalDisplayOutput = finalDisplayOutput.replace('ota ', 'otai ');
 }
