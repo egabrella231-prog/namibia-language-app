@@ -188,23 +188,27 @@ export default function App() {
     setLoading(true);
     setSandboxResult('');
     try {
-        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-        let nounData: any = null;
-        let verbData: any = null;
+       try {
+        // Fetch Noun Concord and mutated verb from database View
+        const { data: ncData } = await supabase
+            .from('noun_classes')
+            .select('present_continuous_concord, past_tense_concord')
+            .eq('class_id', 1) 
+            .maybeSingle();
 
-        if (!isOnline) {
-          // Offline evaluation from local constants
-          nounData = OFFLINE_LEXICON.find(w => w.native_word === testSubject && w.pos_tag === 'noun');
-          verbData = OFFLINE_LEXICON.find(w => w.native_word === testVerb && w.pos_tag === 'verb_root');
-        } else {
-          // Online live cloud system database pulling
-          const { data: nD } = await supabase.from('universal_dictionary').select('*').eq('native_word', testSubject).maybeSingle();
-          const { data: vD } = await supabase.from('universal_dictionary').select('*').eq('native_word', testVerb).maybeSingle();
-          nounData = nD;
-          verbData = vD;
+        const { data: verbData } = await supabase
+            .from('api_linguistic_engine')
+            .select('mutated_word')
+            .eq('root_word', testVerb)
+            .eq('tense', testTense)
+            .maybeSingle();
+
+        if (ncData && verbData) {
+            const concord = testTense === 'present' ? ncData.present_continuous_concord : ncData.past_tense_concord;
+            setSandboxResult(`[Oshikwanyama]: ${testSubject} ${concord} ${verbData.mutated_word}`);
+            setLoading(false);
+            return;
         }
-
-        if (nounData && verbData) {
             let concord = '';
             const targetClassId = nounData.noun_class_ref || 1;
 
