@@ -36,7 +36,6 @@ export default function App() {
   const [testTense, setTestTense] = useState('present');
   const [sandboxResult, setSandboxResult] = useState('');
 
-  // Hydrate user library safely if running via web instance
   useEffect(() => {
     if (Platform.OS === 'web') {
       const savedLib = localStorage.getItem('toloka_user_library');
@@ -67,7 +66,6 @@ export default function App() {
     }
   };
 
-  // Offline Engine Word Binder
   const lookupOfflineWord = (word: string, toEnglish: boolean) => {
     const clean = word.trim().toLowerCase();
     const match = OFFLINE_LEXICON.find(item => 
@@ -79,14 +77,11 @@ export default function App() {
     return null;
   };
 
-  // AI Online Translation Engine Fallback Core
   const callAIFallbackTranslation = async (text: string, toEnglish: boolean) => {
     try {
       const prompt = toEnglish 
         ? `Translate this Oshikwanyama text to English. Provide only the direct translation string, nothing else: "${text}"`
         : `Translate this English text to Oshikwanyama. Provide only the direct translation string, nothing else: "${text}"`;
-
-      // Trigger Edge AI API endpoint route setup
       const response = await fetch('/api/translate-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,7 +94,6 @@ export default function App() {
     }
   };
 
-  // Split, deconstruct, and match strings using dynamic hybrid network configurations
   const processComplexSentence = async (sentence: string, toEnglish: boolean) => {
     let cleanInput = sentence.trim().toLowerCase().replace(/^(the|a|an)\s+/i, '');
     const words = cleanInput.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").split(/\s+/);
@@ -111,11 +105,9 @@ export default function App() {
         if (!word.trim() || word === 'the' || word === 'a' || word === 'an') continue;
         
         if (!isOnline) {
-          // Rule 1: Offline mode exclusively tracks the local array matrix definitions
           const offlineMatch = lookupOfflineWord(word, toEnglish);
           assembledTranslation.push(offlineMatch || word);
         } else {
-          // Rule 2: Online tracks Supabase data records directly
           const targetColumn = toEnglish ? 'native_word' : 'english_translation';
           const { data } = await supabase
               .from('universal_dictionary')
@@ -134,7 +126,6 @@ export default function App() {
     return assembledTranslation.length > 0 ? assembledTranslation.join(' ') : null;
   };
 
-  // Main Hybrid Online/Offline Translation Router Engine
   const handleTranslate = async () => {
     if (!inputText.trim()) return;
     setLoading(true);
@@ -143,7 +134,6 @@ export default function App() {
       const targetColumn = isOshikwanyamaToEnglish ? 'native_word' : 'english_translation';
       const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-      // --- OFFLINE MODE OPERATION ---
       if (!isOnline) {
         const offlineResult = lookupOfflineWord(cleanInput, isOshikwanyamaToEnglish);
         if (offlineResult) {
@@ -156,7 +146,6 @@ export default function App() {
         return;
       }
 
-      // --- ONLINE MODE HYBRID STEP (Supabase Cache -> AI Engine) ---
       const { data } = await supabase
         .from('universal_dictionary')
         .select('*')
@@ -166,10 +155,7 @@ export default function App() {
       if (data) {
         setTranslatedText(isOshikwanyamaToEnglish ? data.english_translation : data.native_word);
       } else {
-        // Step A: Attempt structural phrase segmentation mapping
         const processedSentence = await processComplexSentence(inputText, isOshikwanyamaToEnglish);
-        
-        // Step B: If phrase matching falls through, activate full context AI Translation
         if (!processedSentence || processedSentence === inputText) {
           const aiText = await callAIFallbackTranslation(inputText, isOshikwanyamaToEnglish);
           setTranslatedText(aiText || "Translation threshold unmatched across current services.");
@@ -183,74 +169,49 @@ export default function App() {
     setLoading(false);
   };
 
-  // Safe cascading sentence assembler (checks noun_classes then falls back to zimmerman_noun_classes)
+  // Updated Safe cascading sentence assembler using conjugation_classes and transformation_rules
   const runSandboxSentenceTest = async () => {
     setLoading(true);
     setSandboxResult('');
     try {
-       try {
-        // Fetch Noun Concord and mutated verb from database View
-        const { data: ncData } = await supabase
-            .from('noun_classes')
-            .select('present_continuous_concord, past_tense_concord')
-            .eq('class_id', 1) 
-            .maybeSingle();
+      // 1. Fetch Verb Root Conjugation Class ID
+      const { data: verbData } = await supabase
+        .from('api_linguistic_engine')
+        .select('conjugation_class_id, root_word')
+        .eq('root_word', testVerb)
+        .maybeSingle();
 
-        const { data: verbData } = await supabase
-            .from('api_linguistic_engine')
-            .select('mutated_word')
-            .eq('root_word', testVerb)
-            .eq('tense', testTense)
-            .maybeSingle();
+      // 2. Fetch Transformation Rule based on Class and Tense
+      const { data: ruleData } = await supabase
+        .from('transformation_rules')
+        .select('pattern_match, pattern_replace')
+        .eq('conjugation_class_id', verbData?.conjugation_class_id)
+        .eq('tense', testTense)
+        .maybeSingle();
 
-        if (ncData && verbData) {
-            const concord = testTense === 'present' ? ncData.present_continuous_concord : ncData.past_tense_concord;
-            setSandboxResult(`[Oshikwanyama]: ${testSubject} ${concord} ${verbData.mutated_word}`);
-            setLoading(false);
-            return;
-        }
-            let concord = '';
-            const targetClassId = nounData.noun_class_ref || 1;
+      // 3. Fetch Noun Concord
+      const { data: ncData } = await supabase
+        .from('noun_classes')
+        .select('present_continuous_concord, past_tense_concord')
+        .eq('class_id', 1) 
+        .maybeSingle();
 
-            if (!isOnline) {
-              // Static concord map evaluation for complete offline execution
-              if (targetClassId === 1) concord = testTense === 'present' ? 'ota' : 'okwa';
-              if (targetClassId === 9) concord = testTense === 'present' ? 'otai' : 'oda';
-            } else {
-              // FIRST TRY: Production 'noun_classes' table
-              const { data: ncData } = await supabase.from('noun_classes').select('*').eq('class_id', targetClassId).maybeSingle();
-              if (ncData) {
-                  concord = testTense === 'present' ? ncData.present_continuous_concord : ncData.past_tense_concord;
-              }
-              // SECOND TRY FALLBACK: If nothing found, check 'zimmerman_noun_classes'
-              if (!concord) {
-                  const { data: zncData } = await supabase.from('zimmerman_noun_classes').select('*').eq('class_id', targetClassId).maybeSingle();
-                  if (zncData) {
-                      concord = testTense === 'present' ? zncData.present_continuous_concord : zncData.past_tense_concord;
-                  }
-              }
-            }
-
-            // Execute syntax mutations based on terminal variables
-            let finalVerbText = verbData.native_word;
-            if (testTense === 'present' && verbData.terminal_vowel_mutation === 'mutates_to_e_in_present') {
-                if (finalVerbText.endsWith('a')) {
-                    finalVerbText = finalVerbText.slice(0, -1) + 'e';
-                }
-            }
-
-            if (concord) {
-                setSandboxResult(`[Oshikwanyama]: ${nounData.native_word} ${concord} ${finalVerbText}`);
-            } else {
-                setSandboxResult(`[Oshikwanyama]: ${nounData.native_word} ${finalVerbText} (Concord definitions missing from your active class matrices)`);
-            }
-        } else {
-            setSandboxResult("Engine Error: The selected variables could not be found or processed.");
-        }
+      if (verbData && ruleData && ncData) {
+        // Apply Regex Mutation
+        const regex = new RegExp(ruleData.pattern_match);
+        const mutated = testVerb.replace(regex, ruleData.pattern_replace);
+        
+        const concord = testTense === 'present' ? ncData.present_continuous_concord : ncData.past_tense_concord;
+        setSandboxResult(`[Oshikwanyama]: ${testSubject} ${concord} ${mutated}`);
+      } else {
+        setSandboxResult("Engine Error: No rule found for this verb/tense combination.");
+      }
     } catch (err) {
-        setSandboxResult("Linguistic relational engine processing failure.");
+      console.error(err);
+      setSandboxResult("Linguistic relational engine processing failure.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -267,7 +228,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Primary Translation Card */}
         <View style={styles.card}>
           <View style={styles.inputRow}>
             <TextInput style={styles.input} value={inputText} onChangeText={setInputText} placeholder="Type words here..." placeholderTextColor="#4a4d61" />
@@ -290,7 +250,6 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {/* Relational Parsing Sandbox Panel */}
         <View style={styles.sandboxPanel}>
           <Text style={styles.sandboxTitle}>🧪 Zimmerman Relational Engine Test</Text>
           <Text style={styles.sandboxSubtitle}>Synchronizes cross-compatible components across tables:</Text>
